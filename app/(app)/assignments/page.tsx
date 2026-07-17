@@ -87,50 +87,64 @@ export default async function AssignmentsPage() {
 
       {orderedGroups.map(([groupName, items]) => (
         <div key={groupName} className="mt-8">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-            {groupName}
-          </h2>
-          <ul className="mt-2 divide-y divide-hair border-t border-hair">
-            {items.map((a) => {
-              const grade = oneOrFirst(a.submissions[0]?.grades)?.points_earned;
-              const submitted = a.submissions.length > 0;
+          {/* bCourses assignment-group block: a bordered card with a
+              grey group header, then rows carrying a green status bar on
+              the left, a type icon, a bold title, and a due/points line. */}
+          <div className="overflow-hidden rounded-md border border-hair">
+            <div className="bg-[#f2f4f4] px-4 py-2.5">
+              <h2 className="text-sm font-bold text-navy-deep">{groupName}</h2>
+            </div>
+            <ul className="divide-y divide-hair">
+              {items.map((a) => {
+                const grade = oneOrFirst(a.submissions[0]?.grades)?.points_earned;
+                const submitted = a.submissions.length > 0;
 
-              let status: string;
-              let statusClass: string;
-              if (canManage) {
-                status = `${a.submissions.length} submitted`;
-                statusClass = "text-muted";
-              } else if (grade != null) {
-                status = `${grade}/${a.points_possible} pts`;
-                statusClass = "text-navy font-medium";
-              } else if (submitted) {
-                status = "Submitted";
-                statusClass = "text-pos font-medium";
-              } else {
-                status = `— / ${a.points_possible} pts`;
-                statusClass = "text-muted";
-              }
+                let status: string;
+                let statusClass: string;
+                if (canManage) {
+                  status = `${a.submissions.length} submitted`;
+                  statusClass = "text-muted";
+                } else if (grade != null) {
+                  status = `${grade}/${a.points_possible} pts`;
+                  statusClass = "text-navy-deep font-medium";
+                } else if (submitted) {
+                  status = "Submitted";
+                  statusClass = "text-pos font-medium";
+                } else {
+                  status = `—/${a.points_possible} pts`;
+                  statusClass = "text-muted";
+                }
+                // Green bar = has a grade/submission; grey otherwise —
+                // matches bCourses' left status rail.
+                const barColor = grade != null || submitted ? "bg-pos" : "bg-hair";
 
-              return (
-                <li key={a.id}>
-                  <Link
-                    href={`/assignments/${a.id}`}
-                    className="flex items-center justify-between py-3.5 transition-colors hover:bg-hair/40"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-text">
-                        {a.title}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted">
-                        {fmtDue(a.due_at)}
-                      </p>
-                    </div>
-                    <span className={`text-sm ${statusClass}`}>{status}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                return (
+                  <li key={a.id}>
+                    <Link
+                      href={`/assignments/${a.id}`}
+                      className="flex items-stretch transition-colors hover:bg-[#eef7ff]"
+                    >
+                      <span className={`w-1 flex-shrink-0 ${barColor}`} aria-hidden />
+                      <span className="flex flex-1 items-center justify-between gap-4 py-3 pl-3 pr-4">
+                        <span className="flex items-center gap-2.5">
+                          <span aria-hidden className="text-base">📝</span>
+                          <span>
+                            <span className="block text-sm font-semibold text-sky">
+                              {a.title}
+                            </span>
+                            <span className="mt-0.5 block text-xs text-muted">
+                              {fmtDue(a.due_at)} &middot; {a.points_possible} pts
+                            </span>
+                          </span>
+                        </span>
+                        <span className={`whitespace-nowrap text-sm ${statusClass}`}>{status}</span>
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         </div>
       ))}
 
