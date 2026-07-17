@@ -10,8 +10,8 @@ export default function Home() {
         Undergraduate Real Estate Club
       </h1>
       <p className="mt-6 max-w-md text-white/70">
-        The Deal Library and Member Workspace are moving in here. For now,
-        exec and analysts can sign in below.
+        The Deal Library and Member Workspace, home to the UREC Analyst
+        Program. Sign in with your @berkeley.edu account below.
       </p>
       <Link
         href="/login"

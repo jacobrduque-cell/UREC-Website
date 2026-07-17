@@ -133,13 +133,31 @@ Reasoning: These add complexity for capabilities UREC will never use.
 - Milestone: Members see in-platform notifications and check the bell
   regularly; email nudges are a follow-up, not yet built
 
-### Phase 5 — Deal library integration + Wiki pages + Roles polish (~4 hours)
+### Phase 5 — Deal library integration + Wiki pages + Roles polish (~4 hours) — SHIPPED 2026-07-17
 
-- Deal library becomes protected route
-- Simple markdown editor for wiki pages
-- Grant can write module content directly in platform
-- Role permissions fully enforced everywhere
-- iCal export for calendar
+- Deal library moved from an unprotected prototype file into
+  `public/deal-library.html`, gated the same way every other route is
+  (proxy.ts runs on `/public` requests too, not just app routes) —
+  requires @berkeley.edu sign-in like everything else now. Linked from
+  the dashboard; kept as its own static self-contained page rather than
+  ported into React, since it's genuinely a separate product with its
+  own KKR-inspired design system (see CLAUDE.md)
+- Modules is now backed by the `wiki_pages` table that was scaffolded
+  in Phase 1: list/create/edit/publish, markdown body rendered with
+  `marked` through the same `.rich-content` trusted-render pattern as
+  assignment descriptions. Exec-write is RLS-enforced
+  (`wiki_pages_write_exec`), same "RLS is the real gate" convention used
+  everywhere else in this codebase
+- Role permissions audit: re-verified every actions.ts file relies on
+  RLS as the actual enforcement (not just UI hiding), and found + fixed
+  one real gap — the new calendar subscribe feed (below) used the
+  admin/service-role client with no session, so it had to re-implement
+  the enrollment/exec check by hand instead of getting it from RLS
+- iCal: calendar page now has a "Get a calendar subscribe link" button.
+  Generates a per-user token (hash stored in the `api_tokens` table
+  scaffolded in Phase 1), exposed once, that Google/Apple Calendar can
+  poll as a live feed (`/api/calendar/feed/[token]`) rather than a
+  one-time download that goes stale
 - Milestone: Ready to announce to full club
 
 Total realistic time: ~30 hours of Jacob's time over 4-6 weeks.

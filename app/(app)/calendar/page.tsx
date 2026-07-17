@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
+import { generateCalendarFeedToken } from "./actions";
+import { headers } from "next/headers";
 import Link from "next/link";
 
 type EventRow = {
@@ -37,8 +39,16 @@ function fmt(iso: string, allDay: boolean) {
   return d.toLocaleString("en-US", opts);
 }
 
-export default async function CalendarPage() {
-  const [course, isExec] = await Promise.all([getCurrentCourse(), getIsExec()]);
+export default async function CalendarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ feed?: string }>;
+}) {
+  const [course, isExec, { feed }] = await Promise.all([
+    getCurrentCourse(),
+    getIsExec(),
+    searchParams,
+  ]);
   const supabase = await createClient();
 
   const { data } = await supabase
@@ -49,6 +59,14 @@ export default async function CalendarPage() {
 
   const events = (data ?? []) as EventRow[];
   const { upcoming, past } = splitUpcomingPast(events);
+
+  let feedUrl: string | null = null;
+  if (feed) {
+    const h = await headers();
+    const host = h.get("host");
+    const protocol = host?.startsWith("localhost") ? "http" : "https";
+    feedUrl = `${protocol}://${host}/api/calendar/feed/${feed}`;
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
@@ -70,6 +88,32 @@ export default async function CalendarPage() {
           </Link>
         )}
       </div>
+
+      {feedUrl ? (
+        <div className="mt-6 rounded-lg border border-hair bg-pale/40 p-4">
+          <p className="text-sm font-medium text-text">
+            Your personal subscribe link
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Save this now &mdash; it won&rsquo;t be shown again. Add it to
+            Google Calendar (Other calendars &rarr; From URL) or Apple
+            Calendar (File &rarr; New Calendar Subscription) to get every
+            event automatically.
+          </p>
+          <code className="mt-2 block overflow-x-auto rounded-md bg-white px-3 py-2 text-xs text-navy">
+            {feedUrl}
+          </code>
+        </div>
+      ) : (
+        <form action={generateCalendarFeedToken} className="mt-6">
+          <button
+            type="submit"
+            className="text-sm text-blue hover:underline"
+          >
+            Get a calendar subscribe link
+          </button>
+        </form>
+      )}
 
       <div className="mt-8">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
