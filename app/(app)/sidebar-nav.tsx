@@ -9,7 +9,7 @@ import { usePathname } from "next/navigation";
 // Home, Announcements, Syllabus, Modules, Assignments, Discussions,
 // Quizzes, People, Grades, Files, Calendar.
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Home" },
+  { href: "/home", label: "Home" },
   { href: "/announcements", label: "Announcements" },
   { href: "/syllabus", label: "Syllabus" },
   { href: "/modules", label: "Modules" },

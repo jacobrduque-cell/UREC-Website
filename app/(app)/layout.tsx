@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getCurrentProfile, getIsExec } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { LayoutGrid, BookOpen, Users, CalendarDays, Bell, Settings, Menu } from "lucide-react";
+import { LayoutGrid, Users, CalendarDays, Bell, Settings, Menu } from "lucide-react";
 import { SidebarNav } from "./sidebar-nav";
 import { PageCrumb } from "./page-crumb";
 
@@ -95,9 +95,6 @@ export default async function AppLayout({
           <RailLink href="/dashboard" label="Dashboard">
             <LayoutGrid className="h-5 w-5" strokeWidth={1.75} />
           </RailLink>
-          <RailLink href="/modules" label="Courses">
-            <BookOpen className="h-5 w-5" strokeWidth={1.75} />
-          </RailLink>
           <RailLink href="/directory" label="People">
             <Users className="h-5 w-5" strokeWidth={1.75} />
           </RailLink>
@@ -149,7 +146,7 @@ export default async function AppLayout({
             <Menu className="h-5 w-5" strokeWidth={1.75} />
           </label>
           <nav className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium">
-            <Link href="/dashboard" className="truncate text-navy-deep hover:underline">
+            <Link href="/home" className="truncate text-navy-deep hover:underline">
               {courseLabel}
             </Link>
             <PageCrumb />

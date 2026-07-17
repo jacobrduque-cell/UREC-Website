@@ -31,7 +31,7 @@ export async function GET(
     .eq("id", courseId)
     .maybeSingle();
 
-  const to = new URL(request.url).searchParams.get("to") ?? "/announcements";
+  const to = new URL(request.url).searchParams.get("to") ?? "/home";
   const dest = course ? to : "/dashboard";
   const response = NextResponse.redirect(new URL(dest, request.url));
 
