@@ -18,6 +18,12 @@ dist/
 build/
 *.log
 
+# Next.js
+/.next/
+/out/
+*.tsbuildinfo
+next-env.d.ts
+
 # Python (asset generation scripts)
 __pycache__/
 *.pyc

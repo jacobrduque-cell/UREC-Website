@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  --navy: #1B3D7B;
+  --navy-deep: #0E2147;
+  --navy-darker: #091633;
+  --blue: #2A6DB5;
+  --sky: #5DADE2;
+  --pale: #EBF5FB;
+  --gold: #C8A24B;
+  --paper: #F8F6F1;
+  --paper-warm: #EDE8DC;
+  --ink: #0A1426;
+  --text: #1A2744;
+  --muted: #5A6B8A;
+  --hair: rgba(27, 61, 123, 0.12);
+  --pos: #2D8659;
+  --neg: #A8324C;
+
+  --background: var(--paper);
+  --foreground: var(--text);
+}
+
+@theme inline {
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-navy-darker: var(--navy-darker);
+  --color-blue: var(--blue);
+  --color-sky: var(--sky);
+  --color-pale: var(--pale);
+  --color-gold: var(--gold);
+  --color-paper: var(--paper);
+  --color-paper-warm: var(--paper-warm);
+  --color-ink: var(--ink);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+  --font-ui: var(--font-lato);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
