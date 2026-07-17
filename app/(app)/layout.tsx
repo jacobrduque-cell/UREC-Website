@@ -2,9 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getCurrentProfile, getIsExec } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { LayoutGrid, Users, CalendarDays, Bell, Settings, Menu } from "lucide-react";
-import { SidebarNav } from "./sidebar-nav";
-import { PageCrumb } from "./page-crumb";
+import { LayoutGrid, Bell, Settings } from "lucide-react";
+import { CourseSidebar } from "./course-sidebar";
+import { CourseTopBar } from "./course-topbar";
 
 function initials(name: string | null | undefined, email: string | undefined) {
   if (name) {
@@ -95,12 +95,6 @@ export default async function AppLayout({
           <RailLink href="/dashboard" label="Dashboard">
             <LayoutGrid className="h-5 w-5" strokeWidth={1.75} />
           </RailLink>
-          <RailLink href="/directory" label="People">
-            <Users className="h-5 w-5" strokeWidth={1.75} />
-          </RailLink>
-          <RailLink href="/calendar" label="Calendar">
-            <CalendarDays className="h-5 w-5" strokeWidth={1.75} />
-          </RailLink>
           <RailLink href="/notifications" label="Alerts" badge={unreadCount ?? 0}>
             <Bell className="h-5 w-5" strokeWidth={1.75} />
           </RailLink>
@@ -129,29 +123,13 @@ export default async function AppLayout({
         </div>
       </nav>
 
-      {/* Course menu — bCourses course-level nav: term label, then plain
-          text links. Collapses when the header hamburger is toggled. */}
-      <aside className="w-56 flex-shrink-0 overflow-hidden border-r border-hair bg-white peer-checked:hidden">
-        <p className="px-4 pt-4 text-xs italic text-muted">{term}</p>
-        <SidebarNav />
-      </aside>
+      {/* Course menu — only rendered inside a course (see CourseSidebar);
+          the Dashboard/admin pages show just the blue rail. Collapses
+          when the header hamburger is toggled (peer checkbox above). */}
+      <CourseSidebar term={term} />
 
       <div className="flex min-w-0 flex-1 flex-col bg-white">
-        <header className="flex items-center gap-3 border-b border-hair px-5 py-3.5">
-          <label
-            htmlFor="nav-toggle"
-            className="cursor-pointer rounded p-1 text-muted transition-colors hover:bg-hair hover:text-text"
-            aria-label="Toggle course navigation"
-          >
-            <Menu className="h-5 w-5" strokeWidth={1.75} />
-          </label>
-          <nav className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium">
-            <Link href="/home" className="truncate text-navy-deep hover:underline">
-              {courseLabel}
-            </Link>
-            <PageCrumb />
-          </nav>
-        </header>
+        <CourseTopBar courseLabel={courseLabel} />
         <main className="flex-1 bg-paper">{children}</main>
       </div>
     </div>
