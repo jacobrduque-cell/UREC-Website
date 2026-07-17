@@ -50,3 +50,47 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+/* Exec-authored rich content (assignment descriptions, announcements
+   later) — RLS restricts writes to exec, so this is a trusted-content
+   render, not user-submitted HTML. */
+.rich-content h3 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.05rem;
+  color: var(--navy);
+  margin: 1.75rem 0 0.6rem;
+}
+.rich-content h3:first-child {
+  margin-top: 0;
+}
+.rich-content p {
+  margin: 0.6rem 0;
+  line-height: 1.65;
+}
+.rich-content ul,
+.rich-content ol {
+  margin: 0.5rem 0 0.75rem;
+  padding-left: 1.4rem;
+  line-height: 1.65;
+}
+.rich-content ul {
+  list-style: disc;
+}
+.rich-content ol {
+  list-style: decimal;
+}
+.rich-content li {
+  margin: 0.2rem 0;
+}
+.rich-content strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.rich-content code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--hair);
+  padding: 0.1em 0.4em;
+  border-radius: 3px;
+}

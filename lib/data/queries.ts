@@ -41,6 +41,16 @@ export async function getCurrentCourse() {
   return data;
 }
 
+/** Signed URL valid for 5 minutes — files live in a private bucket. */
+export async function getSignedFileUrl(storagePath: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage
+    .from("submissions")
+    .createSignedUrl(storagePath, 300);
+  if (error) return null;
+  return data.signedUrl;
+}
+
 export async function getCurrentProfile() {
   const supabase = await createClient();
   const {
