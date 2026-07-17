@@ -1,12 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentCourse } from "@/lib/data/queries";
+import { getCurrentCourse, oneOrFirst } from "@/lib/data/queries";
 
+type Grade = { points_earned: number };
 type AssignmentRow = {
   id: string;
   title: string;
   points_possible: number;
   assignment_group: { name: string; weight_pct: number; position: number } | null;
-  submissions: { grades: { points_earned: number }[] }[];
+  submissions: { grades: Grade | Grade[] | null }[];
 };
 
 export default async function GradesPage() {
@@ -50,7 +51,7 @@ export default async function GradesPage() {
         hasGraded: false,
       });
     }
-    const grade = a.submissions[0]?.grades?.[0]?.points_earned;
+    const grade = oneOrFirst(a.submissions[0]?.grades)?.points_earned;
     if (grade != null) {
       const cat = categories.get(name)!;
       cat.earned += grade;
@@ -89,7 +90,7 @@ export default async function GradesPage() {
           </thead>
           <tbody>
             {assignments.map((a) => {
-              const grade = a.submissions[0]?.grades?.[0]?.points_earned;
+              const grade = oneOrFirst(a.submissions[0]?.grades)?.points_earned;
               return (
                 <tr key={a.id} className="border-t border-hair">
                   <td className="px-4 py-2.5 text-text">

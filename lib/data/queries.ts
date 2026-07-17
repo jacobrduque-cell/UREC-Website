@@ -2,6 +2,19 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 
 /**
+ * PostgREST returns an embedded resource as an array when the
+ * relationship is one-to-many, but as a single object when it detects
+ * one-to-one (e.g. grades.submission_id is unique, so "a submission's
+ * grades" comes back as one object, not a one-item array). Call sites
+ * that read a to-one embed should go through this instead of assuming
+ * either shape.
+ */
+export function oneOrFirst<T>(value: T | T[] | null | undefined): T | undefined {
+  if (value == null) return undefined;
+  return Array.isArray(value) ? value[0] : value;
+}
+
+/**
  * These wrap the same public.is_exec()/is_enrolled() functions the RLS
  * policies use (see supabase/migrations/20260717000100_rls_policies.sql),
  * called via RPC instead of reimplementing the role logic in TypeScript.

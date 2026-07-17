@@ -1,14 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
+import { getCurrentCourse, getIsExec, oneOrFirst } from "@/lib/data/queries";
 import Link from "next/link";
 
+type Grade = { points_earned: number };
 type AssignmentRow = {
   id: string;
   title: string;
   points_possible: number;
   due_at: string | null;
   assignment_group: { name: string; position: number } | null;
-  submissions: { id: string; grades: { points_earned: number }[] }[];
+  submissions: { id: string; grades: Grade | Grade[] | null }[];
 };
 
 function fmtDue(iso: string | null) {
@@ -64,7 +65,7 @@ export default async function AssignmentsPage() {
           </h2>
           <ul className="mt-2 divide-y divide-hair border-t border-hair">
             {items.map((a) => {
-              const grade = a.submissions[0]?.grades?.[0]?.points_earned;
+              const grade = oneOrFirst(a.submissions[0]?.grades)?.points_earned;
               const submitted = a.submissions.length > 0;
 
               let status: string;

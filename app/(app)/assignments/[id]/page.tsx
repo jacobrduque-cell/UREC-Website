@@ -1,8 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { getIsExec, getSignedFileUrl } from "@/lib/data/queries";
+import { getIsExec, getSignedFileUrl, oneOrFirst } from "@/lib/data/queries";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { submitAssignment } from "../actions";
+
+type Grade = { points_earned: number };
 
 type Assignment = {
   id: string;
@@ -27,7 +29,7 @@ type Submission = {
   submitted_at: string;
   body_text: string | null;
   url: string | null;
-  grades: { points_earned: number }[];
+  grades: Grade | Grade[] | null;
   submission_files: { file: { id: string; filename: string; storage_path: string } }[];
 };
 
@@ -244,7 +246,7 @@ async function SubmissionSummary({
   submission: Submission;
   pointsPossible: number;
 }) {
-  const grade = submission.grades?.[0]?.points_earned;
+  const grade = oneOrFirst(submission.grades)?.points_earned;
   const fileEntries = await Promise.all(
     submission.submission_files.map(async (sf) => ({
       ...sf.file,
