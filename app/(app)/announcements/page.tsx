@@ -7,6 +7,7 @@ type AnnouncementRow = {
   title: string;
   body: string;
   pinned: boolean;
+  locked: boolean;
   published_at: string | null;
   author: { full_name: string | null; email: string } | null;
 };
@@ -27,7 +28,7 @@ export default async function AnnouncementsPage() {
     ? await supabase
         .from("announcements")
         .select(
-          "id, title, body, pinned, published_at, author:users(full_name, email)",
+          "id, title, body, pinned, locked, published_at, author:users(full_name, email)",
         )
         .eq("course_id", course.id)
         .order("pinned", { ascending: false })
@@ -58,7 +59,10 @@ export default async function AnnouncementsPage() {
       </div>
 
       <ul className="mt-8 divide-y divide-hair border-t border-hair">
-        {announcements.map((a) => (
+        {announcements.map((a) => {
+          const isDraft = !a.published_at;
+          const isScheduled = a.published_at && new Date(a.published_at) > new Date();
+          return (
           <li key={a.id}>
             <Link
               href={`/announcements/${a.id}`}
@@ -68,6 +72,21 @@ export default async function AnnouncementsPage() {
                 {a.pinned && (
                   <span className="rounded-full bg-gold/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold">
                     Pinned
+                  </span>
+                )}
+                {a.locked && (
+                  <span className="rounded-full border border-hair px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                    Locked
+                  </span>
+                )}
+                {isExec && isDraft && (
+                  <span className="rounded-full border border-hair px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                    Draft
+                  </span>
+                )}
+                {isExec && isScheduled && (
+                  <span className="rounded-full border border-blue px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue">
+                    Scheduled
                   </span>
                 )}
                 <p className="font-medium text-text">{a.title}</p>
@@ -80,7 +99,8 @@ export default async function AnnouncementsPage() {
               </p>
             </Link>
           </li>
-        ))}
+          );
+        })}
         {announcements.length === 0 && (
           <li className="py-6 text-sm text-muted">
             No announcements yet.

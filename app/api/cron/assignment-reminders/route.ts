@@ -83,5 +83,42 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ assignments: dueSoon?.length ?? 0, notified });
+  // Scheduled announcements (Phase 6): createAnnouncement() skips
+  // notifying when published_at is in the future, so this sweep is
+  // what actually notifies once that time passes. Vercel's Hobby plan
+  // only allows a daily cron, so a "publish at 9am" announcement is
+  // delivered same-day rather than at that exact minute — a documented
+  // simplification, not a bug.
+  const { data: justPublished } = await admin
+    .from("announcements")
+    .select("id, title, body, course_id, author_id")
+    .lte("published_at", now.toISOString())
+    .gte("published_at", new Date(now.getTime() - 25 * 60 * 60 * 1000).toISOString());
+
+  let announcementsNotified = 0;
+  for (const announcement of justPublished ?? []) {
+    const { data: alreadySent } = await admin
+      .from("notifications")
+      .select("id")
+      .eq("type", "new_announcement")
+      .eq("related_entity_id", announcement.id)
+      .limit(1);
+    if (alreadySent && alreadySent.length > 0) continue;
+
+    const memberIds = await getCourseMemberIds(announcement.course_id, announcement.author_id);
+    await notifyUsers(memberIds, {
+      type: "new_announcement",
+      title: `New announcement: ${announcement.title}`,
+      body: announcement.body.slice(0, 140),
+      relatedEntityType: "announcement",
+      relatedEntityId: announcement.id,
+    });
+    announcementsNotified += memberIds.length;
+  }
+
+  return NextResponse.json({
+    assignments: dueSoon?.length ?? 0,
+    notified,
+    announcementsNotified,
+  });
 }

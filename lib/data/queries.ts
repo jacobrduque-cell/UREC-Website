@@ -36,6 +36,16 @@ export async function getIsEnrolled(courseId: string): Promise<boolean> {
   return Boolean(data);
 }
 
+/** Grader tier (Phase 6): can grade/view all submissions for a course without full exec power. */
+export async function getIsGrader(courseId: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("is_grader", {
+    target_course_id: courseId,
+  });
+  if (error) return false;
+  return Boolean(data);
+}
+
 /**
  * The single active course for the current term. UREC only runs one
  * course today (UREC Analyst Program), so there's no course switcher
@@ -45,7 +55,7 @@ export async function getCurrentCourse() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("courses")
-    .select("id, name, code, term:terms!inner(name, is_current)")
+    .select("id, name, code, published, term:terms!inner(name, is_current)")
     .eq("terms.is_current", true)
     .limit(1)
     .maybeSingle();

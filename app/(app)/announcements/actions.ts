@@ -10,10 +10,16 @@ export async function createAnnouncement(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
   const pinned = formData.get("pinned") === "on";
+  const locked = formData.get("locked") === "on";
+  const publishAtRaw = String(formData.get("publish_at") ?? "");
 
   if (!title || !body) {
     throw new Error("Title and body are required.");
   }
+
+  const now = new Date();
+  const publishAt = publishAtRaw ? new Date(publishAtRaw) : now;
+  const isScheduledForLater = publishAt.getTime() > now.getTime();
 
   const supabase = await createClient();
   const {
@@ -35,7 +41,8 @@ export async function createAnnouncement(formData: FormData) {
       title,
       body,
       pinned,
-      published_at: new Date().toISOString(),
+      locked,
+      published_at: publishAt.toISOString(),
     })
     .select("id")
     .single();
@@ -44,14 +51,20 @@ export async function createAnnouncement(formData: FormData) {
     throw new Error(error.message);
   }
 
-  const memberIds = await getCourseMemberIds(course.id, user.id);
-  await notifyUsers(memberIds, {
-    type: "new_announcement",
-    title: `New announcement: ${title}`,
-    body: body.slice(0, 140),
-    relatedEntityType: "announcement",
-    relatedEntityId: data.id,
-  });
+  // A future publish_at means nobody should be notified yet — the
+  // daily assignment-reminders cron also sweeps for announcements
+  // whose scheduled time has since passed and notifies then instead
+  // (see app/api/cron/assignment-reminders/route.ts).
+  if (!isScheduledForLater) {
+    const memberIds = await getCourseMemberIds(course.id, user.id);
+    await notifyUsers(memberIds, {
+      type: "new_announcement",
+      title: `New announcement: ${title}`,
+      body: body.slice(0, 140),
+      relatedEntityType: "announcement",
+      relatedEntityId: data.id,
+    });
+  }
 
   revalidatePath("/announcements");
   redirect(`/announcements/${data.id}`);

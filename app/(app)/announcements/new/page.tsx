@@ -52,6 +52,30 @@ export default async function NewAnnouncementPage() {
           Pin to the top
         </label>
 
+        <label className="flex items-center gap-2 text-sm text-text">
+          <input type="checkbox" name="locked" className="h-4 w-4" />
+          Lock replies (post as announcement-only, no discussion)
+        </label>
+
+        <div>
+          <label
+            htmlFor="publish_at"
+            className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted"
+          >
+            Publish (leave blank to post immediately)
+          </label>
+          <input
+            id="publish_at"
+            name="publish_at"
+            type="datetime-local"
+            className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
+          />
+          <p className="mt-1 text-xs text-muted">
+            Scheduled for later: hidden from members and no notification
+            until then.
+          </p>
+        </div>
+
         <div className="flex gap-3">
           <button
             type="submit"

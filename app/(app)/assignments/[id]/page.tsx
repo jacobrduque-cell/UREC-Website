@@ -1,10 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
-import { getIsExec, getSignedFileUrl, oneOrFirst } from "@/lib/data/queries";
-import { notFound } from "next/navigation";
+import { getIsExec, getIsGrader, getSignedFileUrl, oneOrFirst } from "@/lib/data/queries";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { submitAssignment } from "../actions";
+import { addSubmissionComment, submitAssignment } from "../actions";
 
 type Grade = { points_earned: number };
+type Comment = {
+  id: string;
+  body: string;
+  created_at: string;
+  author: { full_name: string | null; email: string } | null;
+};
 
 type Assignment = {
   id: string;
@@ -14,6 +20,7 @@ type Assignment = {
   due_at: string | null;
   submission_type: "file" | "text" | "url" | "none";
   accepted_file_types: string[] | null;
+  course_id: string;
 };
 
 type RubricCriterion = {
@@ -31,6 +38,7 @@ type Submission = {
   url: string | null;
   grades: Grade | Grade[] | null;
   submission_files: { file: { id: string; filename: string; storage_path: string } }[];
+  submission_comments: Comment[];
 };
 
 function fmtDue(iso: string | null) {
@@ -51,39 +59,52 @@ export default async function AssignmentDetailPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
-  const isExec = await getIsExec();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
-  const [{ data: assignment }, { data: rubricLinks }, { data: submissions }] =
-    await Promise.all([
-      supabase
-        .from("assignments")
-        .select(
-          "id, title, description, points_possible, due_at, submission_type, accepted_file_types",
-        )
-        .eq("id", id)
-        .maybeSingle(),
-      supabase
-        .from("assignment_rubrics")
-        .select(
-          "rubric:rubrics(rubric_criteria(id, criterion, description, points, position))",
-        )
-        .eq("assignment_id", id),
-      supabase
-        .from("submissions")
-        .select(
-          `id, submitted_at, body_text, url,
-           grades(points_earned),
-           submission_files(file:files(id, filename, storage_path))`,
-        )
-        .eq("assignment_id", id)
-        .order("submitted_at", { ascending: false }),
-    ]);
-
-  if (!assignment) {
-    notFound();
-  }
+  const { data: assignment } = await supabase
+    .from("assignments")
+    .select(
+      "id, title, description, points_possible, due_at, submission_type, accepted_file_types, course_id",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (!assignment) notFound();
 
   const a = assignment as unknown as Assignment;
+  const [isExec, isGrader] = await Promise.all([
+    getIsExec(),
+    getIsGrader(a.course_id),
+  ]);
+  const canManage = isExec || isGrader;
+
+  const [{ data: rubricLinks }, submissionData] = await Promise.all([
+    supabase
+      .from("assignment_rubrics")
+      .select(
+        "rubric:rubrics(rubric_criteria(id, criterion, description, points, position))",
+      )
+      .eq("assignment_id", id),
+    canManage
+      ? supabase
+          .from("submissions")
+          .select("id", { count: "exact", head: true })
+          .eq("assignment_id", id)
+      : supabase
+          .from("submissions")
+          .select(
+            `id, submitted_at, body_text, url,
+             grades(points_earned),
+             submission_files(file:files(id, filename, storage_path)),
+             submission_comments(id, body, created_at, author:users(full_name, email))`,
+          )
+          .eq("assignment_id", id)
+          .eq("user_id", user.id)
+          .maybeSingle(),
+  ]);
+
   const criteria = (
     (rubricLinks?.[0] as unknown as {
       rubric: { rubric_criteria: RubricCriterion[] } | null;
@@ -91,7 +112,8 @@ export default async function AssignmentDetailPage({
   ).sort((x, y) => x.position - y.position);
   const totalRubricPoints = criteria.reduce((s, c) => s + c.points, 0);
 
-  const mySubmission = (submissions?.[0] as unknown as Submission) ?? null;
+  const submissionCount = canManage ? (submissionData.count ?? 0) : 0;
+  const mySubmission = canManage ? null : (submissionData.data as unknown as Submission | null);
   const submitAction = submitAssignment.bind(null, id);
 
   return (
@@ -166,18 +188,28 @@ export default async function AssignmentDetailPage({
         </div>
       )}
 
-      {isExec ? (
+      {canManage ? (
         <div className="mt-10 rounded-md border border-hair bg-paper-warm p-5">
           <p className="text-sm text-text">
-            {submissions?.length ?? 0} submission
-            {submissions?.length === 1 ? "" : "s"} so far.
+            {submissionCount} submission
+            {submissionCount === 1 ? "" : "s"} so far.
           </p>
-          <Link
-            href={`/assignments/${id}/grade`}
-            className="mt-3 inline-block rounded-full bg-navy px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue"
-          >
-            Review &amp; Grade
-          </Link>
+          <div className="mt-3 flex gap-3">
+            <Link
+              href={`/assignments/${id}/grade`}
+              className="inline-block rounded-full bg-navy px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue"
+            >
+              Review &amp; Grade
+            </Link>
+            {isExec && (
+              <Link
+                href={`/assignments/${id}/edit`}
+                className="inline-block rounded-full border border-hair px-5 py-2 text-sm font-medium text-text transition-colors hover:bg-hair"
+              >
+                Edit
+              </Link>
+            )}
+          </div>
         </div>
       ) : (
         <div className="mt-10 border-t border-hair pt-8">
@@ -186,45 +218,38 @@ export default async function AssignmentDetailPage({
           </h2>
 
           {mySubmission ? (
-            <SubmissionSummary
-              submission={mySubmission}
-              pointsPossible={a.points_possible}
-            />
+            <>
+              <SubmissionSummary
+                submission={mySubmission}
+                pointsPossible={a.points_possible}
+                assignmentId={id}
+              />
+              <details className="mt-4">
+                <summary className="cursor-pointer text-sm text-blue hover:underline">
+                  Resubmit
+                </summary>
+                <form
+                  action={submitAction}
+                  encType="multipart/form-data"
+                  className="mt-4 flex flex-col gap-4"
+                >
+                  <SubmissionFields assignment={a} />
+                  <button
+                    type="submit"
+                    className="self-start rounded-full bg-navy px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue"
+                  >
+                    Resubmit
+                  </button>
+                </form>
+              </details>
+            </>
           ) : (
             <form
               action={submitAction}
               encType="multipart/form-data"
               className="mt-4 flex flex-col gap-4"
             >
-              {a.submission_type === "text" && (
-                <textarea
-                  name="body_text"
-                  required
-                  rows={8}
-                  placeholder="Write your submission…"
-                  className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-                />
-              )}
-              {a.submission_type === "url" && (
-                <input
-                  name="url"
-                  type="url"
-                  required
-                  placeholder="https://…"
-                  className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-                />
-              )}
-              {a.submission_type === "file" && (
-                <input
-                  name="file"
-                  type="file"
-                  required
-                  accept={a.accepted_file_types
-                    ?.map((t) => `.${t}`)
-                    .join(",")}
-                  className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none file:mr-3 file:rounded-full file:border-0 file:bg-navy file:px-4 file:py-1.5 file:text-xs file:font-medium file:text-white"
-                />
-              )}
+              <SubmissionFields assignment={a} />
               <button
                 type="submit"
                 className="self-start rounded-full bg-navy px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue"
@@ -239,12 +264,48 @@ export default async function AssignmentDetailPage({
   );
 }
 
+function SubmissionFields({ assignment: a }: { assignment: Assignment }) {
+  return (
+    <>
+      {a.submission_type === "text" && (
+        <textarea
+          name="body_text"
+          required
+          rows={8}
+          placeholder="Write your submission…"
+          className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
+        />
+      )}
+      {a.submission_type === "url" && (
+        <input
+          name="url"
+          type="url"
+          required
+          placeholder="https://…"
+          className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
+        />
+      )}
+      {a.submission_type === "file" && (
+        <input
+          name="file"
+          type="file"
+          required
+          accept={a.accepted_file_types?.map((t) => `.${t}`).join(",")}
+          className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none file:mr-3 file:rounded-full file:border-0 file:bg-navy file:px-4 file:py-1.5 file:text-xs file:font-medium file:text-white"
+        />
+      )}
+    </>
+  );
+}
+
 async function SubmissionSummary({
   submission,
   pointsPossible,
+  assignmentId,
 }: {
   submission: Submission;
   pointsPossible: number;
+  assignmentId: string;
 }) {
   const grade = oneOrFirst(submission.grades)?.points_earned;
   const fileEntries = await Promise.all(
@@ -253,6 +314,10 @@ async function SubmissionSummary({
       url: await getSignedFileUrl(sf.file.storage_path),
     })),
   );
+  const comments = [...submission.submission_comments].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+  const commentAction = addSubmissionComment.bind(null, submission.id, assignmentId);
 
   return (
     <div className="mt-4 rounded-md border border-hair bg-white p-5">
@@ -319,6 +384,44 @@ async function SubmissionSummary({
           minute: "2-digit",
         })}
       </p>
+
+      {comments.length > 0 && (
+        <div className="mt-4 border-t border-hair pt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Comments
+          </p>
+          <ul className="mt-2 flex flex-col gap-2">
+            {comments.map((c) => (
+              <li key={c.id} className="rounded bg-paper-warm p-2.5 text-sm text-text">
+                <p>{c.body}</p>
+                <p className="mt-1 text-xs text-muted">
+                  {c.author?.full_name ?? c.author?.email ?? "Unknown"} &middot;{" "}
+                  {new Date(c.created_at).toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <form action={commentAction} className="mt-3 flex gap-2">
+        <input
+          type="text"
+          name="body"
+          placeholder="Ask a question about this submission…"
+          className="flex-1 rounded-md border border-hair bg-white px-3 py-1.5 text-sm text-text outline-none focus:border-blue"
+        />
+        <button
+          type="submit"
+          className="whitespace-nowrap rounded-full border border-hair px-4 py-1.5 text-xs font-medium text-text transition-colors hover:bg-hair"
+        >
+          Comment
+        </button>
+      </form>
     </div>
   );
 }

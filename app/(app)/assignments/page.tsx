@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentCourse, getIsExec, oneOrFirst } from "@/lib/data/queries";
+import { getCurrentCourse, getIsExec, getIsGrader, oneOrFirst } from "@/lib/data/queries";
 import Link from "next/link";
 
 type Grade = { points_earned: number };
@@ -18,11 +18,22 @@ function fmtDue(iso: string | null) {
 }
 
 export default async function AssignmentsPage() {
-  const [course, isExec] = await Promise.all([getCurrentCourse(), getIsExec()]);
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const { data } = course
-    ? await supabase
+  const [course, isExec] = await Promise.all([getCurrentCourse(), getIsExec()]);
+  const isGrader = course ? await getIsGrader(course.id) : false;
+  const canManage = isExec || isGrader;
+
+  // Graders/exec see every student's submissions (for the "N submitted"
+  // count); everyone else's embed is explicitly scoped to their own row
+  // so it can never show someone else's grade — RLS alone now lets
+  // graders see the whole course's submissions, so this can't rely on
+  // RLS narrowing it down implicitly the way it used to for plain members.
+  let query = course
+    ? supabase
         .from("assignments")
         .select(
           `id, title, points_possible, due_at,
@@ -31,7 +42,11 @@ export default async function AssignmentsPage() {
         )
         .eq("course_id", course.id)
         .order("due_at", { ascending: true })
-    : { data: null };
+    : null;
+  if (query && !canManage && user) {
+    query = query.eq("submissions.user_id", user.id);
+  }
+  const { data } = query ? await query : { data: null };
 
   const assignments = (data ?? []) as unknown as AssignmentRow[];
 
@@ -51,12 +66,24 @@ export default async function AssignmentsPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-8 py-12">
-      <h1 className="font-display text-2xl font-normal text-navy">
-        Assignments
-      </h1>
-      <p className="mt-2 text-sm text-muted">
-        {course?.name ?? "UREC Analyst Program"}
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-normal text-navy">
+            Assignments
+          </h1>
+          <p className="mt-2 text-sm text-muted">
+            {course?.name ?? "UREC Analyst Program"}
+          </p>
+        </div>
+        {isExec && (
+          <Link
+            href="/assignments/new"
+            className="whitespace-nowrap rounded-full bg-navy px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue"
+          >
+            New Assignment
+          </Link>
+        )}
+      </div>
 
       {orderedGroups.map(([groupName, items]) => (
         <div key={groupName} className="mt-8">
@@ -70,7 +97,7 @@ export default async function AssignmentsPage() {
 
               let status: string;
               let statusClass: string;
-              if (isExec) {
+              if (canManage) {
                 status = `${a.submissions.length} submitted`;
                 statusClass = "text-muted";
               } else if (grade != null) {

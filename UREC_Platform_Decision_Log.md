@@ -158,9 +158,68 @@ Reasoning: These add complexity for capabilities UREC will never use.
   scaffolded in Phase 1), exposed once, that Google/Apple Calendar can
   poll as a live feed (`/api/calendar/feed/[token]`) rather than a
   one-time download that goes stale
-- Milestone: Ready to announce to full club
+- Milestone: Ready to announce to full club *(revised — see Phase 6;
+  this call was premature)*
 
-Total realistic time: ~30 hours of Jacob's time over 4-6 weeks.
+### Phase 6 — Real Canvas parity audit + fixes (~10 hours) — SHIPPED 2026-07-17
+
+Triggered by cloning the actual open-source Canvas LMS repository
+(instructure/canvas-lms — real schema, models, controllers, and
+frontend) and diffing our schema/UI against it feature-by-feature,
+instead of building from a best-guess of how Canvas works. Found real
+gaps, not just missing nice-to-haves:
+
+- **Courses had no publish/draft lifecycle** — every other content
+  table (assignments/files/wiki_pages) already gated on `published`;
+  courses didn't, inconsistent with our own schema. Added
+  `courses.published` + RLS, plus a toggle on the new Terms & Courses
+  page.
+- **No grader/TA permission tier** — the only way to let someone grade
+  was to hand them full exec power. Added a course-scoped `Grader` role
+  (`is_grader()`, mirrors Canvas's `TaEnrollment`) that can grade/view
+  all submissions without touching announcements, roles, or anything
+  else exec-only.
+- **No way to lock replies on an announcement**, and **saving an
+  announcement always published + notified immediately** — no
+  draft/scheduled state. Added `announcements.locked` and made
+  `published_at` a real gate (future timestamp = scheduled/hidden until
+  then); the daily cron now also sweeps for newly-passed scheduled
+  announcements to notify (same-day precision, not exact-time — Vercel
+  Hobby only allows a daily cron).
+- **No way to create or edit an assignment without hand-writing SQL** —
+  the single biggest gap. Built the full form (category, points, due
+  date, submission type, rubric attach-or-create, publish toggle),
+  reusing a new `/assignments/rubrics` page for reusable rubric
+  authoring.
+- **Resubmitting an assignment was silently buggy** — a resubmission
+  inserted a new row instead of updating, and grade/roster queries had
+  no explicit order, so a resubmission could show the wrong grade or
+  make a graded assignment look ungraded. Consolidated to one current
+  submission per student per assignment (`attempt_number` still
+  increments, so "attempt 3" is visible — full Canvas-style version
+  history is an intentional simplification, not built), with a
+  migration that safely merges any existing duplicate rows in
+  production and carries an existing grade forward rather than losing
+  it.
+- **The rubric was decorative** — it rendered on the assignment page
+  but grading only ever wrote one raw point total; the
+  `rubric_assessment` jsonb column made for this was never touched.
+  Grading page now shows a real per-criterion scoring UI when a rubric
+  is attached.
+- **No course/term creation UI** — the actual succession-proofing gap:
+  every term rollover required raw SQL. New `/courses` page lets any
+  exec create a term+course and flip the "current term" pointer.
+- **Submission comments table/RLS existed but nothing used it** — wired
+  up a comment thread on both the grading page and the student's own
+  submission view.
+- Confirmed several things were correctly *already* out of scope for a
+  15-20 person single-course club and left alone: course sections, SIS
+  fields, per-section/per-student due-date overrides, late-policy
+  automation, podcasts/cross-listing, a full custom-role admin UI.
+- Milestone: the specific, real gaps found in the Phase 5 audit are
+  closed. Ready to announce to the full club.
+
+Total realistic time: ~40 hours of Jacob's time over 5-7 weeks.
 
 ## Part 5 — Change log
 

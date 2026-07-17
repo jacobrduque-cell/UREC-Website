@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentCourse, getCurrentProfile } from "@/lib/data/queries";
+import { getCurrentCourse, getCurrentProfile, getIsExec } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -47,10 +47,22 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const [profile, course] = await Promise.all([
+  const [profile, course, isExec] = await Promise.all([
     getCurrentProfile(),
     getCurrentCourse(),
+    getIsExec(),
   ]);
+
+  const links = isExec
+    ? [
+        ...LINKS,
+        {
+          href: "/courses",
+          title: "Terms & Courses",
+          description: "Roll over to a new semester, publish courses.",
+        },
+      ]
+    : LINKS;
 
   return (
     <div className="mx-auto w-full max-w-4xl px-8 py-12">
@@ -63,7 +75,7 @@ export default async function DashboardPage() {
       </p>
 
       <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {LINKS.map((link) => (
+        {links.map((link) => (
           <Link
             key={link.href}
             href={link.href}

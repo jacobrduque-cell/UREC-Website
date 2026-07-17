@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getIsExec } from "@/lib/data/queries";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createReply } from "../actions";
@@ -8,6 +9,7 @@ type Announcement = {
   title: string;
   body: string;
   pinned: boolean;
+  locked: boolean;
   published_at: string | null;
   author: { full_name: string | null; email: string } | null;
 };
@@ -36,12 +38,13 @@ export default async function AnnouncementDetailPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
+  const isExec = await getIsExec();
 
   const [{ data: announcement }, { data: replies }] = await Promise.all([
     supabase
       .from("announcements")
       .select(
-        "id, title, body, pinned, published_at, author:users(full_name, email)",
+        "id, title, body, pinned, locked, published_at, author:users(full_name, email)",
       )
       .eq("id", id)
       .maybeSingle(),
@@ -70,6 +73,11 @@ export default async function AnnouncementDetailPage({
         {a.pinned && (
           <span className="rounded-full bg-gold/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold">
             Pinned
+          </span>
+        )}
+        {a.locked && (
+          <span className="rounded-full border border-hair px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+            Locked
           </span>
         )}
         <h1 className="font-display text-2xl font-normal text-navy">
@@ -102,21 +110,27 @@ export default async function AnnouncementDetailPage({
           ))}
         </ul>
 
-        <form action={replyAction} className="mt-6 flex flex-col gap-3">
-          <textarea
-            name="body"
-            required
-            rows={3}
-            placeholder="Write a reply…"
-            className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-          />
-          <button
-            type="submit"
-            className="self-start rounded-full bg-navy px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue"
-          >
-            Reply
-          </button>
-        </form>
+        {a.locked && !isExec ? (
+          <p className="mt-6 text-sm text-muted">
+            Replies are locked on this announcement.
+          </p>
+        ) : (
+          <form action={replyAction} className="mt-6 flex flex-col gap-3">
+            <textarea
+              name="body"
+              required
+              rows={3}
+              placeholder="Write a reply…"
+              className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
+            />
+            <button
+              type="submit"
+              className="self-start rounded-full bg-navy px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue"
+            >
+              Reply
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

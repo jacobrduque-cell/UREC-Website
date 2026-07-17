@@ -13,17 +13,27 @@ type AssignmentRow = {
 export default async function GradesPage() {
   const course = await getCurrentCourse();
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const { data } = course
-    ? await supabase
-        .from("assignments")
-        .select(
-          `id, title, points_possible,
-           assignment_group:assignment_groups(name, weight_pct, position),
-           submissions(grades(points_earned))`,
-        )
-        .eq("course_id", course.id)
-    : { data: null };
+  // This is a personal "my grades" view, not a gradebook — the
+  // submissions embed is explicitly scoped to the viewer's own row so
+  // a grader/exec who happens to also be enrolled never sees someone
+  // else's grade mixed in (RLS alone now lets graders see every
+  // student's submissions, so it can't be relied on to narrow this).
+  const { data } =
+    course && user
+      ? await supabase
+          .from("assignments")
+          .select(
+            `id, title, points_possible,
+             assignment_group:assignment_groups(name, weight_pct, position),
+             submissions(grades(points_earned))`,
+          )
+          .eq("course_id", course.id)
+          .eq("submissions.user_id", user.id)
+      : { data: null };
 
   const assignments = (data ?? []) as unknown as AssignmentRow[];
 
