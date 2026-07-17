@@ -120,13 +120,18 @@ Reasoning: These add complexity for capabilities UREC will never use.
 - Grade-input flow for exec team
 - Milestone: HW1 flow works end-to-end for real
 
-### Phase 4 — Calendar + Files + Notifications (~6 hours)
+### Phase 4 — Calendar + Files + Notifications (~6 hours) — SHIPPED 2026-07-17
 
-- Shared calendar with real events
-- Files section with folders, uploads, publishing
-- Email notifications wired up (Resend or Postmark)
-- 4 notification triggers live
-- Milestone: Members getting email nudges, checking platform regularly
+- Shared calendar with real events (exec-only creation)
+- Files section with folders, uploads, publishing (private `course-files`
+  storage bucket, RLS gated on the `published` flag)
+- In-app notifications: bell + unread badge, notifications page,
+  mark-read/mark-all-read (see change log — email deferred, not built)
+- 4 notification triggers live: new announcement, assignment graded,
+  assignment due tomorrow (Vercel Cron), and the underlying data layer
+  supports new-assignment once the exec "create assignment" UI exists
+- Milestone: Members see in-platform notifications and check the bell
+  regularly; email nudges are a follow-up, not yet built
 
 ### Phase 5 — Deal library integration + Wiki pages + Roles polish (~4 hours)
 
@@ -146,6 +151,7 @@ Any time a decision changes, add a new row here with date, decision that changed
 | Date | Decision | Old | New | Reason |
 |------|----------|-----|-----|--------|
 | 2026-07-07 | Advanced Rubrics build priority | "Include and prioritize" (reusable templates day 1) | "Scaffold + build basic in Phase 3, advanced later" | Reverting to Claude's original recommendation to keep Phase 3 tight |
+| 2026-07-17 | Phase 4 notification delivery | Email (Resend/Postmark) | In-app only (bell + notifications page) | Email service was still an open question (Part 6); building in-app first avoids blocking Phase 4 on a vendor decision. Email can be layered on later by having `notifyUsers()` also send mail. |
 
 ## Part 6 — Open questions to revisit
 
