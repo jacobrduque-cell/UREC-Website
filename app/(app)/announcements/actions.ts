@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse } from "@/lib/data/queries";
+import { getCourseMemberIds, notifyUsers } from "@/lib/notifications";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
@@ -42,6 +43,15 @@ export async function createAnnouncement(formData: FormData) {
   if (error) {
     throw new Error(error.message);
   }
+
+  const memberIds = await getCourseMemberIds(course.id, user.id);
+  await notifyUsers(memberIds, {
+    type: "new_announcement",
+    title: `New announcement: ${title}`,
+    body: body.slice(0, 140),
+    relatedEntityType: "announcement",
+    relatedEntityId: data.id,
+  });
 
   revalidatePath("/announcements");
   redirect(`/announcements/${data.id}`);

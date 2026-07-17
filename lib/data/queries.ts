@@ -54,11 +54,14 @@ export async function getCurrentCourse() {
   return data;
 }
 
-/** Signed URL valid for 5 minutes — files live in a private bucket. */
-export async function getSignedFileUrl(storagePath: string) {
+/** Signed URL valid for 5 minutes — every bucket in this project is private. */
+export async function getSignedFileUrl(
+  storagePath: string,
+  bucket: "submissions" | "course-files" = "submissions",
+) {
   const supabase = await createClient();
   const { data, error } = await supabase.storage
-    .from("submissions")
+    .from(bucket)
     .createSignedUrl(storagePath, 300);
   if (error) return null;
   return data.signedUrl;

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getCurrentProfile } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { SidebarNav } from "./sidebar-nav";
 
 export default async function AppLayout({
@@ -21,9 +22,14 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  const [profile, course] = await Promise.all([
+  const [profile, course, { count: unreadCount }] = await Promise.all([
     getCurrentProfile(),
     getCurrentCourse(),
+    supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .is("read_at", null),
   ]);
 
   return (
@@ -37,6 +43,21 @@ export default async function AppLayout({
             </p>
           </div>
           <div className="flex items-center gap-4">
+            <Link
+              href="/notifications"
+              className="relative rounded-full border border-white/30 p-2 transition-colors hover:bg-white/10"
+              aria-label={`Notifications${unreadCount ? ` (${unreadCount} unread)` : ""}`}
+            >
+              <svg viewBox="0 0 20 20" className="h-4 w-4 fill-none stroke-white stroke-[1.5]">
+                <path d="M4 8a6 6 0 1 1 12 0c0 3.5 1.2 5 1.2 5H2.8S4 11.5 4 8Z" strokeLinejoin="round" />
+                <path d="M8 16a2 2 0 0 0 4 0" strokeLinecap="round" />
+              </svg>
+              {!!unreadCount && unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[10px] font-semibold text-navy-deep">
+                  {unreadCount}
+                </span>
+              )}
+            </Link>
             <span className="text-sm text-white/80">
               {profile?.full_name ?? user.email}
             </span>

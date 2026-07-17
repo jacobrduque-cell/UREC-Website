@@ -36,7 +36,12 @@ export async function proxy(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isAuthCallback = path.startsWith("/auth/");
-  const isPublicPath = PUBLIC_PATHS.includes(path) || isAuthCallback;
+  // API routes handle their own auth (e.g. the CRON_SECRET check on
+  // the scheduled reminder route) — a cron-triggered request has no
+  // user session/cookies at all, so gating /api/* here the same way
+  // as page routes would lock every API route out permanently.
+  const isApiRoute = path.startsWith("/api/");
+  const isPublicPath = PUBLIC_PATHS.includes(path) || isAuthCallback || isApiRoute;
 
   // Enforce @berkeley.edu — this is the actual access restriction; Google
   // Cloud has no domain toggle for a personal-Gmail-owned OAuth client, so

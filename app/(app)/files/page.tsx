@@ -1,5 +1,5 @@
-import { PhasePlaceholder } from "../phase-placeholder";
+import { FileBrowser } from "./file-browser";
 
 export default function FilesPage() {
-  return <PhasePlaceholder title="Files" phase="Phase 4" />;
+  return <FileBrowser folderId={null} />;
 }

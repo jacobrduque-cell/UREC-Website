@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { notifyUsers } from "@/lib/notifications";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
@@ -109,6 +110,40 @@ export async function gradeSubmission(
     { onConflict: "submission_id" },
   );
   if (error) throw new Error(error.message);
+
+  const [{ data: submission }, { data: assignment }] = await Promise.all([
+    supabase
+      .from("submissions")
+      .select("user_id, group_id")
+      .eq("id", submissionId)
+      .maybeSingle(),
+    supabase
+      .from("assignments")
+      .select("title, points_possible")
+      .eq("id", assignmentId)
+      .maybeSingle(),
+  ]);
+
+  let recipientIds: string[] = [];
+  if (submission?.user_id) {
+    recipientIds = [submission.user_id];
+  } else if (submission?.group_id) {
+    const { data: members } = await supabase
+      .from("group_memberships")
+      .select("user_id")
+      .eq("group_id", submission.group_id);
+    recipientIds = (members ?? []).map((m) => m.user_id);
+  }
+
+  if (assignment && recipientIds.length > 0) {
+    await notifyUsers(recipientIds, {
+      type: "assignment_graded",
+      title: `${assignment.title} was graded`,
+      body: `${pointsEarned}/${assignment.points_possible} pts`,
+      relatedEntityType: "assignment",
+      relatedEntityId: assignmentId,
+    });
+  }
 
   revalidatePath(`/assignments/${assignmentId}/grade`);
   revalidatePath(`/assignments/${assignmentId}`);
