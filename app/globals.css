@@ -1,21 +1,32 @@
 @import "tailwindcss";
 
+/*
+ * Phase 7 — real Canvas/bCourses visual system, pulled directly from
+ * instructure/canvas-lms's own brandable_variables.json and
+ * base/_variables.scss (ic-brand-primary, ic-brand-global-nav-bgd,
+ * ic-color-*, ic-border-*), not a guess. Token NAMES below are kept
+ * from the earlier navy/gold identity so every existing page keeps
+ * working unchanged — only the underlying VALUES changed to Canvas's
+ * actual palette. Deal Library (public/deal-library.html) is a
+ * separate, fully self-contained product with its own inline styles
+ * and is untouched by this file.
+ */
 :root {
-  --navy: #1B3D7B;
-  --navy-deep: #0E2147;
-  --navy-darker: #091633;
-  --blue: #2A6DB5;
-  --sky: #5DADE2;
-  --pale: #EBF5FB;
-  --gold: #C8A24B;
-  --paper: #F8F6F1;
-  --paper-warm: #EDE8DC;
-  --ink: #0A1426;
-  --text: #1A2744;
-  --muted: #5A6B8A;
-  --hair: rgba(27, 61, 123, 0.12);
-  --pos: #2D8659;
-  --neg: #A8324C;
+  --navy: #334451; /* Canvas's global-nav / oxford slate, not a blue anymore */
+  --navy-deep: #273540; /* Canvas ic-color-dark (licorice) */
+  --navy-darker: #1c262d;
+  --blue: #2B7ABC; /* Canvas ic-brand-primary */
+  --sky: #0E68B3; /* Canvas ic-link-color */
+  --pale: #E0EBF5; /* Canvas ic-bg-light-primary */
+  --gold: #F06E26; /* Canvas's alert/orange, closest to a warm accent it has */
+  --paper: #F2F4F4; /* Canvas ic-body-background-color */
+  --paper-warm: #F2F4F4;
+  --ink: #273540;
+  --text: #273540; /* Canvas ic-brand-font-color-dark */
+  --muted: #6A7883; /* Canvas ic-color-medium / heather */
+  --hair: #E8EAEC; /* Canvas ic-border-light / tiara */
+  --pos: #03893D; /* Canvas ic-color-success / shamrock */
+  --neg: #E62429; /* Canvas ic-color-danger / crimson */
 
   --background: var(--paper);
   --foreground: var(--text);
@@ -39,8 +50,11 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
-  --font-display: var(--font-fraunces);
-  --font-sans: var(--font-inter);
+  /* Canvas has no serif display face anywhere — Lato end to end.
+     font-display now resolves to the same face as font-sans so any
+     component still using it renders correctly without edits. */
+  --font-display: var(--font-lato);
+  --font-sans: var(--font-lato);
   --font-mono: var(--font-jetbrains-mono);
   --font-ui: var(--font-lato);
 }
@@ -49,16 +63,17 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  font-size: 16px;
 }
 
-/* Exec-authored rich content (assignment descriptions, announcements
-   later) — RLS restricts writes to exec, so this is a trusted-content
-   render, not user-submitted HTML. */
+/* Exec-authored rich content (assignment descriptions, wiki pages) —
+   RLS restricts writes to exec, so this is a trusted-content render,
+   not user-submitted HTML. */
 .rich-content h3 {
   font-family: var(--font-display);
-  font-weight: 500;
+  font-weight: 700;
   font-size: 1.05rem;
-  color: var(--navy);
+  color: var(--navy-deep);
   margin: 1.75rem 0 0.6rem;
 }
 .rich-content h3:first-child {
@@ -66,13 +81,13 @@ body {
 }
 .rich-content p {
   margin: 0.6rem 0;
-  line-height: 1.65;
+  line-height: 1.5;
 }
 .rich-content ul,
 .rich-content ol {
   margin: 0.5rem 0 0.75rem;
   padding-left: 1.4rem;
-  line-height: 1.65;
+  line-height: 1.5;
 }
 .rich-content ul {
   list-style: disc;
@@ -85,17 +100,17 @@ body {
 }
 .rich-content strong {
   color: var(--text);
-  font-weight: 600;
+  font-weight: 700;
 }
 .rich-content code {
   font-family: var(--font-mono);
   font-size: 0.85em;
-  background: var(--hair);
+  background: var(--paper);
   padding: 0.1em 0.4em;
   border-radius: 3px;
 }
 .rich-content pre {
-  background: var(--hair);
+  background: var(--paper);
   padding: 0.9rem 1rem;
   border-radius: 6px;
   overflow-x: auto;
@@ -108,8 +123,8 @@ body {
 .rich-content h1,
 .rich-content h2 {
   font-family: var(--font-display);
-  font-weight: 500;
-  color: var(--navy);
+  font-weight: 700;
+  color: var(--navy-deep);
 }
 .rich-content h1 {
   font-size: 1.4rem;
@@ -124,7 +139,7 @@ body {
   margin-top: 0;
 }
 .rich-content a {
-  color: var(--blue);
+  color: var(--sky);
   text-decoration: underline;
   text-underline-offset: 2px;
 }

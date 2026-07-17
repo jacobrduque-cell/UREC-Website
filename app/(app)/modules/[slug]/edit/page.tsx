@@ -37,7 +37,7 @@ export default async function EditWikiPage({
 
   return (
     <div className="mx-auto w-full max-w-2xl px-8 py-12">
-      <h1 className="font-display text-2xl font-normal text-navy">
+      <h1 className="font-display text-2xl font-bold text-navy-deep">
         Edit Page
       </h1>
 
@@ -87,13 +87,13 @@ export default async function EditWikiPage({
         <div className="flex gap-3">
           <button
             type="submit"
-            className="rounded-full bg-navy px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue"
+            className="rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
           >
             Save Changes
           </button>
           <Link
             href={`/modules/${slug}`}
-            className="rounded-full border border-hair px-6 py-2.5 text-sm font-medium text-text transition-colors hover:bg-hair"
+            className="rounded-md border border-hair px-6 py-2.5 text-sm font-medium text-text transition-colors hover:bg-[#eef7ff]"
           >
             Cancel
           </Link>

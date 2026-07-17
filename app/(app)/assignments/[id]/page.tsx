@@ -21,6 +21,7 @@ type Assignment = {
   submission_type: "file" | "text" | "url" | "none";
   accepted_file_types: string[] | null;
   course_id: string;
+  allow_group_submission: boolean;
 };
 
 type RubricCriterion = {
@@ -67,7 +68,7 @@ export default async function AssignmentDetailPage({
   const { data: assignment } = await supabase
     .from("assignments")
     .select(
-      "id, title, description, points_possible, due_at, submission_type, accepted_file_types, course_id",
+      "id, title, description, points_possible, due_at, submission_type, accepted_file_types, course_id, allow_group_submission",
     )
     .eq("id", id)
     .maybeSingle();
@@ -79,6 +80,22 @@ export default async function AssignmentDetailPage({
     getIsGrader(a.course_id),
   ]);
   const canManage = isExec || isGrader;
+
+  let myGroupId: string | null = null;
+  if (!canManage && a.allow_group_submission) {
+    const { data: membership } = await supabase
+      .from("group_memberships")
+      .select("group_id, group:groups!inner(course_id)")
+      .eq("user_id", user.id)
+      .eq("group.course_id", a.course_id)
+      .maybeSingle();
+    myGroupId = membership?.group_id ?? null;
+  }
+
+  const submissionColumns = `id, submitted_at, body_text, url,
+             grades(points_earned),
+             submission_files(file:files(id, filename, storage_path)),
+             submission_comments(id, body, created_at, author:users(full_name, email))`;
 
   const [{ data: rubricLinks }, submissionData] = await Promise.all([
     supabase
@@ -92,17 +109,21 @@ export default async function AssignmentDetailPage({
           .from("submissions")
           .select("id", { count: "exact", head: true })
           .eq("assignment_id", id)
-      : supabase
-          .from("submissions")
-          .select(
-            `id, submitted_at, body_text, url,
-             grades(points_earned),
-             submission_files(file:files(id, filename, storage_path)),
-             submission_comments(id, body, created_at, author:users(full_name, email))`,
-          )
-          .eq("assignment_id", id)
-          .eq("user_id", user.id)
-          .maybeSingle(),
+      : a.allow_group_submission
+        ? myGroupId
+          ? supabase
+              .from("submissions")
+              .select(submissionColumns)
+              .eq("assignment_id", id)
+              .eq("group_id", myGroupId)
+              .maybeSingle()
+          : Promise.resolve({ data: null, count: null })
+        : supabase
+            .from("submissions")
+            .select(submissionColumns)
+            .eq("assignment_id", id)
+            .eq("user_id", user.id)
+            .maybeSingle(),
   ]);
 
   const criteria = (
@@ -114,6 +135,7 @@ export default async function AssignmentDetailPage({
 
   const submissionCount = canManage ? (submissionData.count ?? 0) : 0;
   const mySubmission = canManage ? null : (submissionData.data as unknown as Submission | null);
+  const needsGroupToSubmit = !canManage && a.allow_group_submission && !myGroupId;
   const submitAction = submitAssignment.bind(null, id);
 
   return (
@@ -122,7 +144,7 @@ export default async function AssignmentDetailPage({
         &larr; Back to Assignments
       </Link>
 
-      <h1 className="mt-4 font-display text-2xl font-normal text-navy">
+      <h1 className="mt-4 font-display text-2xl font-bold text-navy-deep">
         {a.title}
       </h1>
 
@@ -197,14 +219,14 @@ export default async function AssignmentDetailPage({
           <div className="mt-3 flex gap-3">
             <Link
               href={`/assignments/${id}/grade`}
-              className="inline-block rounded-full bg-navy px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue"
+              className="inline-block rounded-md bg-blue px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-sky"
             >
               Review &amp; Grade
             </Link>
             {isExec && (
               <Link
                 href={`/assignments/${id}/edit`}
-                className="inline-block rounded-full border border-hair px-5 py-2 text-sm font-medium text-text transition-colors hover:bg-hair"
+                className="inline-block rounded-md border border-hair px-5 py-2 text-sm font-medium text-text transition-colors hover:bg-[#eef7ff]"
               >
                 Edit
               </Link>
@@ -216,8 +238,19 @@ export default async function AssignmentDetailPage({
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
             Submission
           </h2>
+          {a.allow_group_submission && (
+            <p className="mt-2 text-xs text-muted">
+              This assignment submits once per team.
+            </p>
+          )}
 
-          {mySubmission ? (
+          {needsGroupToSubmit ? (
+            <p className="mt-4 text-sm text-muted">
+              You&rsquo;re not in a group yet, so there&rsquo;s nowhere for
+              your team&rsquo;s submission to go. Ask exec to add you to one
+              on the People page.
+            </p>
+          ) : mySubmission ? (
             <>
               <SubmissionSummary
                 submission={mySubmission}
@@ -236,7 +269,7 @@ export default async function AssignmentDetailPage({
                   <SubmissionFields assignment={a} />
                   <button
                     type="submit"
-                    className="self-start rounded-full bg-navy px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue"
+                    className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
                   >
                     Resubmit
                   </button>
@@ -252,7 +285,7 @@ export default async function AssignmentDetailPage({
               <SubmissionFields assignment={a} />
               <button
                 type="submit"
-                className="self-start rounded-full bg-navy px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue"
+                className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
               >
                 Submit Assignment
               </button>
@@ -291,7 +324,7 @@ function SubmissionFields({ assignment: a }: { assignment: Assignment }) {
           type="file"
           required
           accept={a.accepted_file_types?.map((t) => `.${t}`).join(",")}
-          className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none file:mr-3 file:rounded-full file:border-0 file:bg-navy file:px-4 file:py-1.5 file:text-xs file:font-medium file:text-white"
+          className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none file:mr-3 file:rounded-md file:border-0 file:bg-blue file:px-4 file:py-1.5 file:text-xs file:font-medium file:text-white"
         />
       )}
     </>
@@ -323,7 +356,7 @@ async function SubmissionSummary({
     <div className="mt-4 rounded-md border border-hair bg-white p-5">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-display text-xl text-navy">
+          <p className="font-display text-xl font-bold text-navy-deep">
             {grade != null ? grade : "—"}
             <span className="text-sm text-muted"> / {pointsPossible} pts</span>
           </p>
@@ -417,7 +450,7 @@ async function SubmissionSummary({
         />
         <button
           type="submit"
-          className="whitespace-nowrap rounded-full border border-hair px-4 py-1.5 text-xs font-medium text-text transition-colors hover:bg-hair"
+          className="whitespace-nowrap rounded-md border border-hair px-4 py-1.5 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
         >
           Comment
         </button>

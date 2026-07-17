@@ -20,7 +20,7 @@ export default async function CoursesPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl px-8 py-12">
-      <h1 className="font-display text-2xl font-normal text-navy">
+      <h1 className="font-display text-2xl font-bold text-navy-deep">
         Terms &amp; Courses
       </h1>
       <p className="mt-2 max-w-prose text-sm text-muted">
@@ -50,7 +50,7 @@ export default async function CoursesPage() {
                 <form action={setCurrentTerm.bind(null, t.id)}>
                   <button
                     type="submit"
-                    className="whitespace-nowrap rounded-full border border-hair px-3 py-1.5 text-xs font-medium text-text transition-colors hover:bg-hair"
+                    className="whitespace-nowrap rounded-md border border-hair px-3 py-1.5 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
                   >
                     Make Current
                   </button>
@@ -181,7 +181,7 @@ export default async function CoursesPage() {
 
           <button
             type="submit"
-            className="self-start rounded-full bg-navy px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue"
+            className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
           >
             Create Term + Course
           </button>

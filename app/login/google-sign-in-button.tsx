@@ -22,7 +22,7 @@ export function GoogleSignInButton() {
     <button
       onClick={handleSignIn}
       disabled={pending}
-      className="w-full rounded-full bg-navy px-6 py-3 font-ui text-sm font-medium tracking-wide text-white transition-colors hover:bg-blue disabled:opacity-60"
+      className="w-full rounded-md bg-blue px-6 py-3 font-ui text-sm font-medium tracking-wide text-white transition-colors hover:bg-sky disabled:opacity-60"
     >
       {pending ? "Redirecting to Google…" : "Sign in with Google"}
     </button>

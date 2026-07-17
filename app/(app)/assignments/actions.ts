@@ -15,6 +15,7 @@ function parseAssignmentFields(formData: FormData) {
   const acceptedFileTypesRaw = String(formData.get("accepted_file_types") ?? "").trim();
   const assignmentGroupId = String(formData.get("assignment_group_id") ?? "") || null;
   const published = formData.get("published") === "on";
+  const allowGroupSubmission = formData.get("allow_group_submission") === "on";
   const rubricId = String(formData.get("rubric_id") ?? "") || null;
 
   if (!title) throw new Error("Title is required.");
@@ -36,6 +37,7 @@ function parseAssignmentFields(formData: FormData) {
       : null,
     assignment_group_id: assignmentGroupId,
     published,
+    allow_group_submission: allowGroupSubmission,
     rubricId,
   };
 }
@@ -171,7 +173,7 @@ export async function submitAssignment(assignmentId: string, formData: FormData)
 
   const { data: assignment, error: aErr } = await supabase
     .from("assignments")
-    .select("id, course_id, submission_type")
+    .select("id, course_id, submission_type, allow_group_submission")
     .eq("id", assignmentId)
     .single();
   if (aErr || !assignment) {
@@ -189,17 +191,36 @@ export async function submitAssignment(assignmentId: string, formData: FormData)
     if (!url) throw new Error("Enter a URL.");
   }
 
-  // One current row per student per assignment (submissions_one_per_user_per_assignment) —
-  // a resubmission updates that same row and bumps attempt_number,
-  // rather than inserting a duplicate. This is what keeps grading
-  // pages, /grades, and /assignments unambiguous about "the" grade for
-  // a student instead of picking an arbitrary row among several.
-  const { data: existing } = await supabase
-    .from("submissions")
-    .select("id, attempt_number")
-    .eq("assignment_id", assignmentId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  // Group assignments submit/grade once per team instead of once per
+  // person — find the student's group for this course (Directory →
+  // Manage Groups is where exec assigns this).
+  let groupId: string | null = null;
+  if (assignment.allow_group_submission) {
+    const { data: membership } = await supabase
+      .from("group_memberships")
+      .select("group_id, group:groups!inner(course_id)")
+      .eq("user_id", user.id)
+      .eq("group.course_id", assignment.course_id)
+      .maybeSingle();
+    if (!membership) {
+      throw new Error(
+        "This assignment submits once per team, and you're not in a group yet — ask exec to add you to one.",
+      );
+    }
+    groupId = membership.group_id;
+  }
+
+  // One current row per student (or per group) per assignment
+  // (submissions_one_per_user_per_assignment /
+  // submissions_one_per_group_per_assignment) — a resubmission updates
+  // that same row and bumps attempt_number, rather than inserting a
+  // duplicate. This is what keeps grading pages, /grades, and
+  // /assignments unambiguous about "the" grade for a student instead of
+  // picking an arbitrary row among several.
+  const ownerQuery = groupId
+    ? supabase.from("submissions").select("id, attempt_number").eq("assignment_id", assignmentId).eq("group_id", groupId)
+    : supabase.from("submissions").select("id, attempt_number").eq("assignment_id", assignmentId).eq("user_id", user.id);
+  const { data: existing } = await ownerQuery.maybeSingle();
 
   let submissionId: string;
   if (existing) {
@@ -224,7 +245,8 @@ export async function submitAssignment(assignmentId: string, formData: FormData)
       .from("submissions")
       .insert({
         assignment_id: assignmentId,
-        user_id: user.id,
+        user_id: groupId ? null : user.id,
+        group_id: groupId,
         body_text: bodyText,
         url,
       })

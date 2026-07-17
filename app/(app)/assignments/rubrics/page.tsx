@@ -30,7 +30,7 @@ export default async function RubricsPage() {
         &larr; Back to New Assignment
       </Link>
 
-      <h1 className="mt-4 font-display text-2xl font-normal text-navy">
+      <h1 className="mt-4 font-display text-2xl font-bold text-navy-deep">
         Rubrics
       </h1>
       <p className="mt-2 text-sm text-muted">
@@ -105,7 +105,7 @@ export default async function RubricsPage() {
 
           <button
             type="submit"
-            className="self-start rounded-full bg-navy px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue"
+            className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
           >
             Create Rubric
           </button>

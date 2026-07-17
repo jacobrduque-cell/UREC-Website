@@ -6,7 +6,7 @@ export default function Home() {
       <p className="text-xs font-medium uppercase tracking-[0.28em] text-white/60">
         UC Berkeley
       </p>
-      <h1 className="mt-6 max-w-2xl font-display text-4xl font-light leading-tight sm:text-6xl">
+      <h1 className="mt-6 max-w-2xl font-display text-4xl font-bold leading-tight sm:text-5xl">
         Undergraduate Real Estate Club
       </h1>
       <p className="mt-6 max-w-md text-white/70">
@@ -15,7 +15,7 @@ export default function Home() {
       </p>
       <Link
         href="/login"
-        className="mt-10 rounded-full bg-white px-8 py-3 text-sm font-medium tracking-wide text-navy-deep transition-colors hover:bg-white/90"
+        className="mt-10 rounded-md bg-white px-8 py-3 text-sm font-medium tracking-wide text-navy-deep transition-colors hover:bg-white/90"
       >
         Member Sign In
       </Link>

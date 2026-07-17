@@ -30,7 +30,7 @@ export default async function NewAssignmentPage() {
         &larr; Back to Assignments
       </Link>
 
-      <h1 className="mt-4 font-display text-2xl font-normal text-navy">
+      <h1 className="mt-4 font-display text-2xl font-bold text-navy-deep">
         New Assignment
       </h1>
 

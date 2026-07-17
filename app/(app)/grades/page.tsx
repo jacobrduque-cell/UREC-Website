@@ -85,7 +85,7 @@ export default async function GradesPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
-      <h1 className="font-display text-2xl font-normal text-navy">Grades</h1>
+      <h1 className="font-display text-2xl font-bold text-navy-deep">Grades</h1>
       <p className="mt-2 text-sm text-muted">
         {course?.name ?? "UREC Analyst Program"}
       </p>
@@ -149,7 +149,7 @@ export default async function GradesPage() {
         </ul>
         <div className="mt-4 flex items-center justify-between border-t border-hair pt-4">
           <span className="font-medium text-navy">Total</span>
-          <span className="font-display text-lg text-navy">
+          <span className="font-display text-lg font-bold text-navy-deep">
             {weightedTotal != null ? `${weightedTotal.toFixed(2)}%` : "—"}
           </span>
         </div>

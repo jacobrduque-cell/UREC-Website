@@ -2,36 +2,48 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  Home,
+  Megaphone,
+  ClipboardList,
+  BarChart3,
+  BookOpen,
+  Folder,
+  CalendarDays,
+  Users,
+} from "lucide-react";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Home" },
-  { href: "/announcements", label: "Announcements" },
-  { href: "/assignments", label: "Assignments" },
-  { href: "/grades", label: "Grades" },
-  { href: "/modules", label: "Modules" },
-  { href: "/files", label: "Files" },
-  { href: "/calendar", label: "Calendar" },
-  { href: "/directory", label: "People" },
+  { href: "/dashboard", label: "Home", icon: Home },
+  { href: "/announcements", label: "Announcements", icon: Megaphone },
+  { href: "/assignments", label: "Assignments", icon: ClipboardList },
+  { href: "/grades", label: "Grades", icon: BarChart3 },
+  { href: "/modules", label: "Modules", icon: BookOpen },
+  { href: "/files", label: "Files", icon: Folder },
+  { href: "/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/directory", label: "People", icon: Users },
 ];
 
 export function SidebarNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex flex-col gap-1 px-3 py-6">
+    <nav className="flex flex-col py-2">
       {NAV_ITEMS.map((item) => {
         const active =
           pathname === item.href || pathname?.startsWith(`${item.href}/`);
+        const Icon = item.icon;
         return (
           <Link
             key={item.href}
             href={item.href}
-            className={`rounded-md px-3 py-2 text-sm font-ui transition-colors ${
+            className={`flex items-center gap-3 border-b border-hair px-4 py-3 text-sm font-ui transition-colors ${
               active
-                ? "bg-navy text-white"
-                : "text-text hover:bg-hair"
+                ? "border-l-2 border-l-blue bg-pale text-sky"
+                : "border-l-2 border-l-transparent text-muted hover:bg-[#eef7ff] hover:text-sky"
             }`}
           >
+            <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
             {item.label}
           </Link>
         );

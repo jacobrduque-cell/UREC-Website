@@ -76,7 +76,7 @@ export async function FileBrowser({ folderId }: { folderId: string | null }) {
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-normal text-navy">
+          <h1 className="font-display text-2xl font-bold text-navy-deep">
             Files
           </h1>
           <nav className="mt-2 flex flex-wrap items-center gap-1 text-sm text-muted">
@@ -109,7 +109,7 @@ export async function FileBrowser({ folderId }: { folderId: string | null }) {
             />
             <button
               type="submit"
-              className="rounded-full border border-navy px-4 py-2 text-xs font-medium text-navy transition-colors hover:bg-navy hover:text-white"
+              className="rounded-md border border-navy px-4 py-2 text-xs font-medium text-navy transition-colors hover:bg-navy hover:text-white"
             >
               New Folder
             </button>
@@ -123,11 +123,11 @@ export async function FileBrowser({ folderId }: { folderId: string | null }) {
               name="file"
               type="file"
               required
-              className="text-sm text-text file:mr-2 file:rounded-full file:border-0 file:bg-navy file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
+              className="text-sm text-text file:mr-2 file:rounded-md file:border-0 file:bg-blue file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
             />
             <button
               type="submit"
-              className="rounded-full bg-navy px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-blue"
+              className="rounded-md bg-blue px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-sky"
             >
               Upload
             </button>

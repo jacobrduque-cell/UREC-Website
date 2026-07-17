@@ -12,6 +12,7 @@ type ExistingAssignment = {
   accepted_file_types: string[] | null;
   assignment_group_id: string | null;
   published: boolean;
+  allow_group_submission: boolean;
 };
 
 function toDatetimeLocal(iso: string | null) {
@@ -196,6 +197,17 @@ export function AssignmentForm({
       <label className="flex items-center gap-2 text-sm text-text">
         <input
           type="checkbox"
+          name="allow_group_submission"
+          defaultChecked={existing?.allow_group_submission ?? false}
+          className="h-4 w-4"
+        />
+        Group submission (submit and grade once per group instead of
+        once per person — see Directory &rarr; Manage Groups)
+      </label>
+
+      <label className="flex items-center gap-2 text-sm text-text">
+        <input
+          type="checkbox"
           name="published"
           defaultChecked={existing?.published ?? false}
           className="h-4 w-4"
@@ -206,7 +218,7 @@ export function AssignmentForm({
 
       <button
         type="submit"
-        className="self-start rounded-full bg-navy px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue"
+        className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
       >
         {submitLabel}
       </button>

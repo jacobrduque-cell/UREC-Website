@@ -217,9 +217,68 @@ gaps, not just missing nice-to-haves:
   fields, per-section/per-student due-date overrides, late-policy
   automation, podcasts/cross-listing, a full custom-role admin UI.
 - Milestone: the specific, real gaps found in the Phase 5 audit are
-  closed. Ready to announce to the full club.
+  closed. *(Revised — the "15-20 person" scale assumption behind
+  several of these calls was wrong; see Phase 7.)*
 
-Total realistic time: ~40 hours of Jacob's time over 5-7 weeks.
+### Phase 7 — Real Canvas visual system + actual scale (~14 hours) — SHIPPED 2026-07-17
+
+Two corrections surfaced after Phase 6: (1) the platform's visual
+identity (navy/gold/Fraunces) never actually resembled Canvas's real
+look, just our best guess at "institutional and serious"; (2) the club
+has **115 members**, not 15-20 — several Phase 5/6 "correctly out of
+scope at this size" calls were wrong at the real scale.
+
+**Visual system, pulled from Canvas's own source** (`brandable_variables.json`,
+`base/_variables.scss`), not guessed:
+- Palette replaced end to end: dark slate global nav (`#334451`), blue
+  primary (`#2B7ABC`), link blue (`#0E68B3`), light grey body background
+  (`#F2F4F4`) — CSS variable *names* (`--navy`, `--gold`, etc.) kept the
+  same so every existing page kept working; only their *values* changed,
+  see `app/globals.css`
+- Typography: dropped Fraunces/Inter entirely — Canvas is Lato end to
+  end, no serif display face. Headings changed from thin/light to bold
+  to match
+- Icons: added `lucide-react`, an icon on every nav item and dashboard
+  card (Canvas is icon-forward throughout, ours had almost none)
+- Shell rebuilt as Canvas's real two-tier nav: a dark icon-only global
+  rail (Dashboard/Calendar/Alerts, exec gets Courses) plus a light
+  icon-labeled course menu, replacing the single custom header+sidebar
+- Buttons swept from rounded-full pill shapes (reads as a marketing
+  site) to Canvas's actual small-radius rectangles (`rounded-md`,
+  `$ic-border-radius` = 6px) across all ~20 pages; small status pills
+  (Pinned/Draft/Locked/badges) correctly kept `rounded-full` since
+  Canvas does use pill badges for those
+- Dashboard rebuilt as a card grid (icon, colored top bar) instead of a
+  welcome message + link list
+- Deal Library untouched — separate product, own inline design system,
+  not part of this pass
+
+**Real scale (115 members) — features that were wrongly deferred:**
+- **Course sections**: built for real. `/directory/sections` (exec:
+  create a section) + per-member section assignment on the People page
+  + a section filter. `course_sections`/`enrollments.section_id` were
+  already scaffolded from Phase 1; this is the first UI that uses them
+- **Groups (case-comp teams)**: built for real. `/directory/groups`
+  (exec: create a group, assign members) + `allow_group_submission` on
+  the assignment form + `submitAssignment` now looks up the student's
+  group and submits/grades once per team instead of once per person.
+  Fixed the same one-current-attempt logic to work per-group
+  (`submissions_one_per_group_per_assignment` already existed from
+  Phase 6's fix, just unused until now)
+- **Real bug caught by testing this locally**: the `submissions`
+  storage bucket only ever let the original uploader (or exec)
+  download a file — correct for individual work, but broke the moment
+  group submissions existed (a teammate who didn't personally upload
+  couldn't see their own team's file) and Graders couldn't either.
+  Fixed the storage policy, and separately found + fixed a real miss
+  from Phase 6: `submission_files` RLS was never updated for the
+  Grader role (only submissions/grades/submission_comments were),
+  caught by the same local test coming back empty for a grader
+- Milestone: platform now visually reads as a real Canvas-family tool,
+  and actually holds up at 115 members instead of the 15-20 assumed
+  earlier. Ready to announce to the full club.
+
+Total realistic time: ~54 hours of Jacob's time over 6-9 weeks.
 
 ## Part 5 — Change log
 

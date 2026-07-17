@@ -18,7 +18,7 @@ export default async function EditAssignmentPage({
   const { data: assignment } = await supabase
     .from("assignments")
     .select(
-      "title, description, points_possible, due_at, submission_type, accepted_file_types, assignment_group_id, published, course_id",
+      "title, description, points_possible, due_at, submission_type, accepted_file_types, assignment_group_id, published, allow_group_submission, course_id",
     )
     .eq("id", id)
     .maybeSingle();
@@ -46,7 +46,7 @@ export default async function EditAssignmentPage({
         &larr; Back to {assignment.title}
       </Link>
 
-      <h1 className="mt-4 font-display text-2xl font-normal text-navy">
+      <h1 className="mt-4 font-display text-2xl font-bold text-navy-deep">
         Edit Assignment
       </h1>
 

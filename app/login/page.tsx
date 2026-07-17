@@ -17,7 +17,7 @@ export default async function LoginPage({
   return (
     <main className="flex flex-1 items-center justify-center bg-navy-deep px-6 py-16">
       <div className="w-full max-w-sm rounded-lg bg-paper p-8 shadow-2xl">
-        <h1 className="font-display text-3xl font-normal text-navy">
+        <h1 className="font-display text-3xl font-bold text-navy-deep">
           UREC Platform
         </h1>
         <p className="mt-2 text-sm text-muted">

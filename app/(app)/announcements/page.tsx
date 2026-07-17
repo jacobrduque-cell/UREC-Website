@@ -41,7 +41,7 @@ export default async function AnnouncementsPage() {
     <div className="mx-auto w-full max-w-4xl px-8 py-12">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-normal text-navy">
+          <h1 className="font-display text-2xl font-bold text-navy-deep">
             Announcements
           </h1>
           <p className="mt-2 text-sm text-muted">
@@ -51,7 +51,7 @@ export default async function AnnouncementsPage() {
         {isExec && (
           <Link
             href="/announcements/new"
-            className="whitespace-nowrap rounded-full bg-navy px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue"
+            className="whitespace-nowrap rounded-md bg-blue px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
           >
             Post Announcement
           </Link>

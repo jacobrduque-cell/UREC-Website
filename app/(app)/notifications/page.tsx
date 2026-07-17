@@ -35,7 +35,7 @@ export default async function NotificationsPage() {
   return (
     <div className="mx-auto w-full max-w-2xl px-8 py-12">
       <div className="flex items-start justify-between gap-4">
-        <h1 className="font-display text-2xl font-normal text-navy">
+        <h1 className="font-display text-2xl font-bold text-navy-deep">
           Notifications
         </h1>
         {unreadCount > 0 && (

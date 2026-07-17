@@ -80,7 +80,7 @@ export default async function AnnouncementDetailPage({
             Locked
           </span>
         )}
-        <h1 className="font-display text-2xl font-normal text-navy">
+        <h1 className="font-display text-2xl font-bold text-navy-deep">
           {a.title}
         </h1>
       </div>
@@ -125,7 +125,7 @@ export default async function AnnouncementDetailPage({
             />
             <button
               type="submit"
-              className="self-start rounded-full bg-navy px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue"
+              className="self-start rounded-md bg-blue px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-sky"
             >
               Reply
             </button>

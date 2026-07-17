@@ -21,6 +21,7 @@ type SubmissionRow = {
   body_text: string | null;
   url: string | null;
   user: { full_name: string | null; email: string } | null;
+  group: { name: string } | null;
   grades: Grade | Grade[] | null;
   submission_files: { file: { id: string; filename: string; storage_path: string } }[];
   submission_comments: Comment[];
@@ -54,6 +55,7 @@ export default async function GradeAssignmentPage({
       .select(
         `id, submitted_at, body_text, url,
          user:users(full_name, email),
+         group:groups(name),
          grades(points_earned, graded_at, rubric_assessment),
          submission_files(file:files(id, filename, storage_path)),
          submission_comments(id, body, created_at, author:users(full_name, email))`,
@@ -82,7 +84,7 @@ export default async function GradeAssignmentPage({
         &larr; Back to {assignment.title}
       </Link>
 
-      <h1 className="mt-4 font-display text-2xl font-normal text-navy">
+      <h1 className="mt-4 font-display text-2xl font-bold text-navy-deep">
         Grade: {assignment.title}
       </h1>
       <p className="mt-2 text-sm text-muted">
@@ -142,7 +144,9 @@ async function SubmissionCard({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-text">
-            {submission.user?.full_name ?? submission.user?.email ?? "Unknown"}
+            {submission.group
+              ? `Team: ${submission.group.name}`
+              : (submission.user?.full_name ?? submission.user?.email ?? "Unknown")}
           </p>
           <p className="mt-0.5 text-xs text-muted">
             Submitted{" "}
@@ -255,7 +259,7 @@ async function SubmissionCard({
         )}
         <button
           type="submit"
-          className="self-start rounded-full bg-navy px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue"
+          className="self-start rounded-md bg-blue px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-sky"
         >
           {grade != null ? "Update Grade" : "Save Grade"}
         </button>
@@ -292,7 +296,7 @@ async function SubmissionCard({
           />
           <button
             type="submit"
-            className="whitespace-nowrap rounded-full border border-hair px-4 py-1.5 text-xs font-medium text-text transition-colors hover:bg-hair"
+            className="whitespace-nowrap rounded-md border border-hair px-4 py-1.5 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
           >
             Comment
           </button>
