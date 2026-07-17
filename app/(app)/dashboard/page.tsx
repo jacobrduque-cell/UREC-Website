@@ -79,21 +79,21 @@ export default async function DashboardPage() {
           <div className="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {courses.map((c) => (
               <div key={c.id} className="overflow-hidden rounded-lg border border-hair bg-white shadow-sm">
-                <Link href="/announcements" aria-label={c.name}>
+                <Link href={`/enter/${c.id}?to=/announcements`} aria-label={c.name}>
                   <div className="h-28" style={{ backgroundColor: colorFor(c.id) }} />
                 </Link>
                 <div className="p-4">
-                  <Link href="/announcements" className="font-ui text-sm font-bold text-sky hover:underline">
+                  <Link href={`/enter/${c.id}?to=/announcements`} className="font-ui text-sm font-bold text-sky hover:underline">
                     {c.name}
                   </Link>
                   <p className="mt-0.5 text-xs text-muted">
                     {c.code ? `${c.code} · ` : ""}{c.term?.name ?? ""}
                   </p>
                   <div className="mt-3 flex items-center gap-4 border-t border-hair pt-3 text-muted">
-                    <Link href="/announcements" title="Announcements" className="hover:text-sky"><Megaphone className="h-4 w-4" strokeWidth={1.75} /></Link>
-                    <Link href="/assignments" title="Assignments" className="hover:text-sky"><ClipboardList className="h-4 w-4" strokeWidth={1.75} /></Link>
-                    <Link href="/discussions" title="Discussions" className="hover:text-sky"><MessagesSquare className="h-4 w-4" strokeWidth={1.75} /></Link>
-                    <Link href="/files" title="Files" className="hover:text-sky"><Folder className="h-4 w-4" strokeWidth={1.75} /></Link>
+                    <Link href={`/enter/${c.id}?to=/announcements`} title="Announcements" className="hover:text-sky"><Megaphone className="h-4 w-4" strokeWidth={1.75} /></Link>
+                    <Link href={`/enter/${c.id}?to=/assignments`} title="Assignments" className="hover:text-sky"><ClipboardList className="h-4 w-4" strokeWidth={1.75} /></Link>
+                    <Link href={`/enter/${c.id}?to=/discussions`} title="Discussions" className="hover:text-sky"><MessagesSquare className="h-4 w-4" strokeWidth={1.75} /></Link>
+                    <Link href={`/enter/${c.id}?to=/files`} title="Files" className="hover:text-sky"><Folder className="h-4 w-4" strokeWidth={1.75} /></Link>
                   </div>
                 </div>
               </div>

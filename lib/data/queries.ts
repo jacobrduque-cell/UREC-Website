@@ -1,4 +1,5 @@
 import "server-only";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -47,12 +48,32 @@ export async function getIsGrader(courseId: string): Promise<boolean> {
 }
 
 /**
- * The single active course for the current term. UREC only runs one
- * course today (UREC Analyst Program), so there's no course switcher
- * yet — this picks the course under whichever term is marked current.
+ * The active course — the one whose content (assignments, files,
+ * modules, people, …) the whole app is currently scoped to. Each
+ * course is fully separate; entering a course from the dashboard sets
+ * the `active_course_id` cookie (see app/enter/[courseId]/route.ts),
+ * and every page reads its course id from here, so switching courses
+ * re-scopes the entire second-sidebar experience at once.
+ *
+ * The lookup goes through RLS, so a cookie pointing at a course the
+ * user can't access simply returns nothing and falls back to the
+ * current term's course. First-time visitors (no cookie) also get the
+ * current-term course.
  */
 export async function getCurrentCourse() {
   const supabase = await createClient();
+  const cookieStore = await cookies();
+  const selectedId = cookieStore.get("active_course_id")?.value;
+
+  if (selectedId) {
+    const { data } = await supabase
+      .from("courses")
+      .select("id, name, code, published, term:terms(name, is_current)")
+      .eq("id", selectedId)
+      .maybeSingle();
+    if (data) return data;
+  }
+
   const { data, error } = await supabase
     .from("courses")
     .select("id, name, code, published, term:terms!inner(name, is_current)")

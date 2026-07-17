@@ -3,15 +3,17 @@ import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
 import Link from "next/link";
 import { assignSection } from "./actions";
 
-type DirectoryRow = {
+type EnrollmentRow = {
   id: string;
-  email: string;
-  full_name: string | null;
-  account_roles: { role: { name: string } | null }[];
-  enrollments: { id: string; role: { name: string } | null; section: { id: string; name: string } | null }[];
+  role: { name: string } | null;
+  section: { id: string; name: string } | null;
+  user: { id: string; email: string; full_name: string | null } | null;
 };
 type Section = { id: string; name: string };
 
+// People is course-scoped: it shows the roster of the ACTIVE course
+// (its enrollments), so each course has its own People list — a member
+// of one cohort doesn't appear in another course's roster.
 export default async function DirectoryPage({
   searchParams,
 }: {
@@ -25,29 +27,32 @@ export default async function DirectoryPage({
 
   const supabase = await createClient();
   const [{ data, error }, { data: sectionsData }] = await Promise.all([
-    supabase
-      .from("users")
-      .select(
-        `id, email, full_name,
-         account_roles(role:roles(name)),
-         enrollments(id, role:roles(name), section:course_sections(id, name))`,
-      )
-      .order("full_name", { ascending: true, nullsFirst: false }),
+    course
+      ? supabase
+          .from("enrollments")
+          .select(
+            `id, role:roles(name), section:course_sections(id, name),
+             user:users(id, email, full_name)`,
+          )
+          .eq("course_id", course.id)
+      : Promise.resolve({ data: [], error: null }),
     course
       ? supabase.from("course_sections").select("id, name").eq("course_id", course.id).order("name")
       : Promise.resolve({ data: [] }),
   ]);
 
-  const allMembers = (data ?? []) as unknown as DirectoryRow[];
+  const allRows = ((data ?? []) as unknown as EnrollmentRow[])
+    .filter((r) => r.user)
+    .sort((a, b) =>
+      (a.user!.full_name ?? a.user!.email).localeCompare(b.user!.full_name ?? b.user!.email),
+    );
   const sections = (sectionsData ?? []) as unknown as Section[];
 
-  const members = sectionFilter
-    ? allMembers.filter((m) =>
-        sectionFilter === "none"
-          ? !m.enrollments[0]?.section
-          : m.enrollments[0]?.section?.id === sectionFilter,
+  const rows = sectionFilter
+    ? allRows.filter((r) =>
+        sectionFilter === "none" ? !r.section : r.section?.id === sectionFilter,
       )
-    : allMembers;
+    : allRows;
 
   return (
     <div className="mx-auto w-full max-w-4xl px-8 py-10">
@@ -55,7 +60,8 @@ export default async function DirectoryPage({
         <div>
           <h1 className="font-display text-2xl font-bold text-navy-deep">People</h1>
           <p className="mt-2 text-sm text-muted">
-            {allMembers.length} member{allMembers.length === 1 ? "" : "s"}
+            {course?.name ?? "UREC Analyst Program"} &middot; {allRows.length}{" "}
+            member{allRows.length === 1 ? "" : "s"}
           </p>
         </div>
         {isExec && (
@@ -104,45 +110,33 @@ export default async function DirectoryPage({
 
       {error && (
         <p className="mt-6 text-sm text-neg">
-          Couldn&rsquo;t load the directory right now.
+          Couldn&rsquo;t load the roster right now.
         </p>
       )}
 
       <ul className="mt-6 divide-y divide-hair border-t border-hair">
-        {members.map((member) => {
-          const roleName =
-            member.account_roles[0]?.role?.name ??
-            member.enrollments[0]?.role?.name ??
-            "Member";
-          const enrollment = member.enrollments[0];
-          const sectionAction = enrollment
-            ? assignSection.bind(null, enrollment.id)
-            : null;
+        {rows.map((r) => {
+          const sectionAction = assignSection.bind(null, r.id);
           return (
-            <li
-              key={member.id}
-              className="flex items-center justify-between gap-4 py-3.5"
-            >
+            <li key={r.id} className="flex items-center justify-between gap-4 py-3.5">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-text">
-                  {member.full_name ?? member.email}
+                  {r.user!.full_name ?? r.user!.email}
                 </p>
-                <p className="truncate text-xs text-muted">{member.email}</p>
+                <p className="truncate text-xs text-muted">{r.user!.email}</p>
               </div>
               <div className="flex flex-shrink-0 items-center gap-3">
-                {enrollment?.section && (
-                  <span className="whitespace-nowrap text-xs text-muted">
-                    {enrollment.section.name}
-                  </span>
+                {r.section && (
+                  <span className="whitespace-nowrap text-xs text-muted">{r.section.name}</span>
                 )}
                 <span className="whitespace-nowrap rounded-full border border-hair px-3 py-1 text-xs font-medium tracking-wide text-navy">
-                  {roleName}
+                  {r.role?.name ?? "Member"}
                 </span>
-                {isExec && sectionAction && sections.length > 0 && (
+                {isExec && sections.length > 0 && (
                   <form action={sectionAction} className="flex items-center gap-1.5">
                     <select
                       name="section_id"
-                      defaultValue={enrollment.section?.id ?? ""}
+                      defaultValue={r.section?.id ?? ""}
                       className="rounded-md border border-hair bg-white px-2 py-1 text-xs text-text outline-none focus:border-blue"
                     >
                       <option value="">No section</option>
@@ -164,10 +158,8 @@ export default async function DirectoryPage({
             </li>
           );
         })}
-        {members.length === 0 && !error && (
-          <li className="py-6 text-sm text-muted">
-            No one matches this filter yet.
-          </li>
+        {rows.length === 0 && !error && (
+          <li className="py-6 text-sm text-muted">No one in this course yet.</li>
         )}
       </ul>
     </div>
