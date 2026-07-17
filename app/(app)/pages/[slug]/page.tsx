@@ -52,7 +52,7 @@ export default async function WikiPageDetail({
         {isExec && (
           <div className="flex flex-shrink-0 gap-2">
             <Link
-              href={`/modules/${page.slug}/edit`}
+              href={`/pages/${page.slug}/edit`}
               className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
             >
               Edit

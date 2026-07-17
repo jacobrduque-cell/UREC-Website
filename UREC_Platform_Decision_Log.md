@@ -278,7 +278,56 @@ scope at this size" calls were wrong at the real scale.
   and actually holds up at 115 members instead of the 15-20 assumed
   earlier. Ready to announce to the full club.
 
-Total realistic time: ~54 hours of Jacob's time over 6-9 weeks.
+### Phase 8 + 9 — Real-bCourses fidelity + missing subsystems (~16 hours) — SHIPPED 2026-07-17
+
+Triggered by a screen recording of Jacob's *actual* live bCourses (not
+just the open-source Canvas code), which surfaced gaps the code-only
+audit missed. Extracted with ffmpeg and reviewed frame-by-frame.
+
+Fidelity fixes (Phase 8):
+- **Course nav is now plain text links, no icons.** The single biggest
+  "reads as not-bCourses" miss: real bCourses course menu is plain blue
+  text links (active item bold black + left border bar); icons live only
+  on the far-left global rail. Phase 7 had wrongly put an icon on every
+  course-menu item.
+- **Modules rebuilt as real Canvas Modules.** Was a flat list of wiki
+  pages; now collapsible containers (one per week/unit) that sequence
+  mixed items — assignments, pages, quizzes, external links, and text
+  headers — via new `modules` + `module_items` tables. The old flat
+  wiki-page list moved to a dedicated **Pages** section (`/pages`), which
+  is what module items of type 'page' point at.
+- **Syllabus page** added (`/syllabus`), stored as a reserved-slug
+  wiki_pages row so it needed no new table.
+- **Dashboard right rail** added: To Do (unsubmitted upcoming
+  assignments), Coming Up (upcoming events), Recent Feedback (recent
+  grades), View Grades — matching bCourses' dashboard column.
+- Course nav order matched to bCourses (Home, Announcements, Syllabus,
+  Modules, Assignments, Discussions, Quizzes, People, Grades, Files,
+  Calendar).
+
+Missing subsystems built (Phase 9):
+- **Discussions** — threaded topic boards on the scaffolded
+  discussion_topics/discussion_replies tables. Any enrolled member can
+  start a topic or reply (unlike exec-only announcements), one level of
+  reply nesting.
+- **Quizzes** — full quiz-taking on the scaffolded quiz_* tables: exec
+  authors a quiz + questions (multiple-choice, true/false, short-answer,
+  essay), students take it, objective questions auto-grade server-side
+  (via the admin client so answer keys are never trusted from the
+  client), written answers left for exec review. Needed one RLS
+  migration to let enrolled students read published quizzes/questions/
+  answers (was exec-only).
+- **Inbox/Conversations** — deliberately deferred to a follow-up; Slack
+  still covers club messaging, so it's the lowest-value of the three.
+
+New migrations handed off: `20260717001400_modules.sql`,
+`20260717001500_quizzes_student_read.sql`. All 16 migrations verified to
+apply clean in sequence, and modules/quizzes RLS functionally tested
+(member sees published only, exec sees drafts, outsider sees nothing,
+member can't write exec-only tables, member can post discussions + take
+quizzes).
+
+Total realistic time: ~70 hours of Jacob's time over 7-10 weeks.
 
 ## Part 5 — Change log
 

@@ -2,48 +2,45 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Home,
-  Megaphone,
-  ClipboardList,
-  BarChart3,
-  BookOpen,
-  Folder,
-  CalendarDays,
-  Users,
-} from "lucide-react";
 
+// Real bCourses course nav is plain text links (no icons — icons live
+// only on the far-left global rail), blue, with the active item bold
+// black and marked by a left border bar. Order mirrors bCourses:
+// Home, Announcements, Syllabus, Modules, Assignments, Discussions,
+// Quizzes, People, Grades, Files, Calendar.
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Home", icon: Home },
-  { href: "/announcements", label: "Announcements", icon: Megaphone },
-  { href: "/assignments", label: "Assignments", icon: ClipboardList },
-  { href: "/grades", label: "Grades", icon: BarChart3 },
-  { href: "/modules", label: "Modules", icon: BookOpen },
-  { href: "/files", label: "Files", icon: Folder },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/directory", label: "People", icon: Users },
+  { href: "/dashboard", label: "Home" },
+  { href: "/announcements", label: "Announcements" },
+  { href: "/syllabus", label: "Syllabus" },
+  { href: "/modules", label: "Modules" },
+  { href: "/assignments", label: "Assignments" },
+  { href: "/discussions", label: "Discussions" },
+  { href: "/quizzes", label: "Quizzes" },
+  { href: "/directory", label: "People" },
+  { href: "/grades", label: "Grades" },
+  { href: "/files", label: "Files" },
+  { href: "/calendar", label: "Calendar" },
 ];
 
 export function SidebarNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex flex-col py-2">
+    <nav className="flex flex-col py-3">
       {NAV_ITEMS.map((item) => {
         const active =
           pathname === item.href || pathname?.startsWith(`${item.href}/`);
-        const Icon = item.icon;
         return (
           <Link
             key={item.href}
             href={item.href}
-            className={`flex items-center gap-3 border-b border-hair px-4 py-3 text-sm font-ui transition-colors ${
+            aria-current={active ? "page" : undefined}
+            className={`border-l-4 py-2.5 pl-4 pr-3 text-sm transition-colors ${
               active
-                ? "border-l-2 border-l-blue bg-pale text-sky"
-                : "border-l-2 border-l-transparent text-muted hover:bg-[#eef7ff] hover:text-sky"
+                ? "border-l-navy-deep font-bold text-navy-deep"
+                : "border-l-transparent font-normal text-sky hover:bg-[#eef7ff]"
             }`}
           >
-            <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
             {item.label}
           </Link>
         );
