@@ -1,29 +1,26 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentCourse, getCurrentProfile, getIsExec } from "@/lib/data/queries";
+import { getCurrentProfile } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import {
-  BookMarked,
-  Megaphone,
-  ClipboardList,
-  BookOpen,
-  CalendarDays,
-  Users,
-  Settings,
-} from "lucide-react";
+import { Megaphone, ClipboardList, MessagesSquare, Folder, BookMarked } from "lucide-react";
 
-const LINKS = [
-  { href: "/deal-library.html", title: "Deal Library", description: "Interactive case studies on landmark CRE deals.", icon: BookMarked, external: true },
-  { href: "/announcements", title: "Announcements", description: "What exec has posted for the club.", icon: Megaphone },
-  { href: "/assignments", title: "Assignments", description: "HW, case studies, and grading.", icon: ClipboardList },
-  { href: "/modules", title: "Modules", description: "Weekly course content.", icon: BookOpen },
-  { href: "/calendar", title: "Calendar", description: "Meetings, deadlines, and events.", icon: CalendarDays },
-  { href: "/directory", title: "People", description: "Everyone enrolled in the program.", icon: Users },
-];
-
+type CourseCard = {
+  id: string;
+  name: string;
+  code: string | null;
+  term: { name: string } | null;
+};
 type DueRow = { id: string; title: string; due_at: string; points_possible: number; submissions: { id: string }[] };
 type EventRow = { id: string; title: string; starts_at: string };
 type FeedbackRow = { points_earned: number; graded_at: string; submission: { assignment: { title: string; points_possible: number } | null } | null };
+
+// Deterministic bCourses-style card header color from the course id.
+const CARD_COLORS = ["#1B3D7B", "#2B7ABC", "#0E6E52", "#8A2E63", "#B4531A", "#334451", "#5B3A8A"];
+function colorFor(id: string) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return CARD_COLORS[h % CARD_COLORS.length];
+}
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -32,84 +29,96 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [profile, course, isExec] = await Promise.all([
-    getCurrentProfile(),
-    getCurrentCourse(),
-    getIsExec(),
-  ]);
-
+  const profile = await getCurrentProfile();
   const nowIso = new Date().toISOString();
 
-  // Right-rail data — the bCourses "To Do / Coming Up / Recent Feedback"
-  // column. To Do = published assignments due in the future that the
-  // viewer hasn't submitted; Coming Up = upcoming calendar events;
-  // Recent Feedback = the viewer's most recent grades.
-  const [{ data: dueData }, { data: eventData }, { data: feedbackData }] = await Promise.all([
-    course
-      ? supabase
-          .from("assignments")
-          .select("id, title, due_at, points_possible, submissions(id)")
-          .eq("course_id", course.id)
-          .eq("published", true)
-          .gte("due_at", nowIso)
-          .eq("submissions.user_id", user.id)
-          .order("due_at", { ascending: true })
-          .limit(5)
-      : Promise.resolve({ data: null }),
-    course
-      ? supabase
-          .from("calendar_events")
-          .select("id, title, starts_at")
-          .or(`course_id.eq.${course.id},course_id.is.null`)
-          .gte("starts_at", nowIso)
-          .order("starts_at", { ascending: true })
-          .limit(5)
-      : Promise.resolve({ data: null }),
-    supabase
-      .from("grades")
-      .select("points_earned, graded_at, submission:submissions!inner(user_id, assignment:assignments(title, points_possible))")
-      .eq("submission.user_id", user.id)
-      .order("graded_at", { ascending: false })
-      .limit(5),
-  ]);
+  // RLS scopes `courses` to what this person can see (published +
+  // enrolled, or everything for exec), so no extra filtering needed.
+  const [{ data: coursesData }, { data: dueData }, { data: eventData }, { data: feedbackData }] =
+    await Promise.all([
+      supabase
+        .from("courses")
+        .select("id, name, code, term:terms(name, starts_on)")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("assignments")
+        .select("id, title, due_at, points_possible, submissions(id)")
+        .eq("published", true)
+        .gte("due_at", nowIso)
+        .eq("submissions.user_id", user.id)
+        .order("due_at", { ascending: true })
+        .limit(5),
+      supabase
+        .from("calendar_events")
+        .select("id, title, starts_at")
+        .gte("starts_at", nowIso)
+        .order("starts_at", { ascending: true })
+        .limit(5),
+      supabase
+        .from("grades")
+        .select("points_earned, graded_at, submission:submissions!inner(user_id, assignment:assignments(title, points_possible))")
+        .eq("submission.user_id", user.id)
+        .order("graded_at", { ascending: false })
+        .limit(5),
+    ]);
 
+  const courses = (coursesData ?? []) as unknown as CourseCard[];
   const toDo = ((dueData ?? []) as unknown as DueRow[]).filter((a) => a.submissions.length === 0);
   const upcoming = (eventData ?? []) as unknown as EventRow[];
   const feedback = (feedbackData ?? []) as unknown as FeedbackRow[];
-
-  const links = isExec
-    ? [...LINKS, { href: "/courses", title: "Terms & Courses", description: "Roll over to a new semester, publish courses.", icon: Settings }]
-    : LINKS;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-8 py-10">
       <h1 className="font-ui text-xl font-bold text-navy-deep">
         Welcome, {profile?.full_name ?? user.email}
       </h1>
-      <p className="mt-1 text-sm text-muted">{course?.name ?? "UREC Analyst Program"}</p>
 
       <div className="mt-6 flex flex-col gap-8 lg:flex-row">
         <div className="flex-1">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {links.map((link) => {
-              const Icon = link.icon;
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  target={link.external ? "_blank" : undefined}
-                  rel={link.external ? "noopener noreferrer" : undefined}
-                  className="overflow-hidden rounded border border-hair bg-white transition-colors hover:border-blue"
-                >
-                  <div className="h-1.5 bg-blue" />
-                  <div className="p-4">
-                    <Icon className="h-6 w-6 text-blue" strokeWidth={1.5} />
-                    <p className="mt-2 font-ui text-sm font-bold text-navy-deep">{link.title}</p>
-                    <p className="mt-1 text-xs text-muted">{link.description}</p>
-                  </div>
+          <h2 className="text-sm font-bold text-navy-deep">Courses</h2>
+          <div className="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {courses.map((c) => (
+              <div key={c.id} className="overflow-hidden rounded-lg border border-hair bg-white shadow-sm">
+                <Link href="/announcements" aria-label={c.name}>
+                  <div className="h-28" style={{ backgroundColor: colorFor(c.id) }} />
                 </Link>
-              );
-            })}
+                <div className="p-4">
+                  <Link href="/announcements" className="font-ui text-sm font-bold text-sky hover:underline">
+                    {c.name}
+                  </Link>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {c.code ? `${c.code} · ` : ""}{c.term?.name ?? ""}
+                  </p>
+                  <div className="mt-3 flex items-center gap-4 border-t border-hair pt-3 text-muted">
+                    <Link href="/announcements" title="Announcements" className="hover:text-sky"><Megaphone className="h-4 w-4" strokeWidth={1.75} /></Link>
+                    <Link href="/assignments" title="Assignments" className="hover:text-sky"><ClipboardList className="h-4 w-4" strokeWidth={1.75} /></Link>
+                    <Link href="/discussions" title="Discussions" className="hover:text-sky"><MessagesSquare className="h-4 w-4" strokeWidth={1.75} /></Link>
+                    <Link href="/files" title="Files" className="hover:text-sky"><Folder className="h-4 w-4" strokeWidth={1.75} /></Link>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Deal Library is a separate product, not a course — a
+                distinct card so it stays discoverable from the home. */}
+            <Link
+              href="/deal-library.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="overflow-hidden rounded-lg border border-hair bg-white shadow-sm transition-colors hover:border-blue"
+            >
+              <div className="flex h-28 items-center justify-center bg-navy-deep">
+                <BookMarked className="h-8 w-8 text-white/90" strokeWidth={1.5} />
+              </div>
+              <div className="p-4">
+                <p className="font-ui text-sm font-bold text-sky">Deal Library</p>
+                <p className="mt-0.5 text-xs text-muted">Interactive CRE case studies</p>
+              </div>
+            </Link>
+
+            {courses.length === 0 && (
+              <p className="text-sm text-muted">No courses yet.</p>
+            )}
           </div>
         </div>
 
