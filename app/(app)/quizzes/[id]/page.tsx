@@ -37,10 +37,44 @@ export default async function QuizDetailPage({
 
   const { data: questionsData } = await supabase
     .from("quiz_questions")
-    .select("id, question_text, question_type, points, position, quiz_answers(id, answer_text, is_correct, position)")
+    .select("id, question_text, question_type, points, position")
     .eq("quiz_id", id)
     .order("position", { ascending: true });
-  const questions = (questionsData ?? []) as unknown as Question[];
+  const baseQuestions = (questionsData ?? []) as unknown as Omit<Question, "quiz_answers">[];
+  const questionIds = baseQuestions.map((q) => q.id);
+
+  // Answer options: exec reads the base table (with is_correct) to author;
+  // students read quiz_answer_options, a view that omits is_correct so the
+  // answer key never reaches the browser or the REST API (see migration
+  // 20260717002700). Grading stays server-side under the admin client.
+  const answersByQuestion = new Map<string, Answer[]>();
+  if (questionIds.length > 0) {
+    if (isExec) {
+      const { data } = await supabase
+        .from("quiz_answers")
+        .select("id, question_id, answer_text, is_correct, position")
+        .in("question_id", questionIds);
+      for (const a of (data ?? []) as (Answer & { question_id: string })[]) {
+        const arr = answersByQuestion.get(a.question_id) ?? [];
+        arr.push(a);
+        answersByQuestion.set(a.question_id, arr);
+      }
+    } else {
+      const { data } = await supabase
+        .from("quiz_answer_options")
+        .select("id, question_id, answer_text, position")
+        .in("question_id", questionIds);
+      for (const a of (data ?? []) as { id: string; question_id: string; answer_text: string; position: number }[]) {
+        const arr = answersByQuestion.get(a.question_id) ?? [];
+        arr.push({ ...a, is_correct: false });
+        answersByQuestion.set(a.question_id, arr);
+      }
+    }
+  }
+  const questions: Question[] = baseQuestions.map((q) => ({
+    ...q,
+    quiz_answers: answersByQuestion.get(q.id) ?? [],
+  }));
   const totalPts = questions.reduce((s, q) => s + Number(q.points), 0);
 
   const { data: mySubmission } = await supabase

@@ -55,6 +55,15 @@ before(async () => {
     [course],
   );
   await db.query(
+    `insert into public.quiz_questions (id, quiz_id, question_text, question_type, points, position)
+       values ('22222222-0000-0000-0000-000000000001','11111111-0000-0000-0000-000000000001','2+2?','multiple_choice',1,0)`,
+  );
+  await db.query(
+    `insert into public.quiz_answers (question_id, answer_text, is_correct, position) values
+       ('22222222-0000-0000-0000-000000000001','4',true,0),
+       ('22222222-0000-0000-0000-000000000001','5',false,1)`,
+  );
+  await db.query(
     `insert into public.quiz_submissions (id, quiz_id, user_id, score, submitted_at)
        values ('33333333-0000-0000-0000-000000000001','11111111-0000-0000-0000-000000000001',$1,0,now())`,
     [STU],
@@ -410,4 +419,35 @@ test("student CANNOT insert a file attributed to someone else", async () => {
     [course, OTHER],
   );
   assert.equal(r.ok, false, "uploaded_by must be the caller");
+});
+
+// ---- Quiz answer-key hardening (fix: 20260717002700) ----
+test("student CANNOT read the quiz answer key (quiz_answers is exec-only)", async () => {
+  const r = await tryAsUser(db, STU, `select count(*)::int n from public.quiz_answers`);
+  assert.equal(r.rows[0].n, 0, "students must not read quiz_answers/is_correct");
+});
+
+test("student CAN read answer options (no is_correct) via the view", async () => {
+  const r = await tryAsUser(
+    db,
+    STU,
+    `select count(*)::int n from public.quiz_answer_options where question_id='22222222-0000-0000-0000-000000000001'`,
+  );
+  assert.equal(r.ok, true);
+  assert.equal(r.rows[0].n, 2, "takers still see the options to answer");
+});
+
+test("quiz_answer_options view does not expose is_correct", async () => {
+  const r = await tryAsUser(db, STU, `select is_correct from public.quiz_answer_options limit 1`);
+  assert.equal(r.ok, false, "is_correct column must not exist on the takers' view");
+});
+
+test("exec CAN still read the quiz answer key", async () => {
+  const r = await tryAsUser(db, EXEC, `select count(*)::int n from public.quiz_answers`);
+  assert.equal(r.rows[0].n, 2);
+});
+
+test("outsider sees no answer options through the view", async () => {
+  const r = await tryAsUser(db, OUTSIDER, `select count(*)::int n from public.quiz_answer_options`);
+  assert.equal(r.rows[0].n, 0);
 });
