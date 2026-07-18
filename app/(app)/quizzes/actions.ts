@@ -54,6 +54,7 @@ export async function addQuestion(quizId: string, formData: FormData) {
     .limit(1)
     .maybeSingle();
 
+  const explanation = String(formData.get("explanation") ?? "").trim() || null;
   const { data: question, error } = await supabase
     .from("quiz_questions")
     .insert({
@@ -62,6 +63,7 @@ export async function addQuestion(quizId: string, formData: FormData) {
       question_type: questionType,
       points: Number.isNaN(points) ? 1 : points,
       position: (last?.position ?? -1) + 1,
+      explanation,
     })
     .select("id")
     .single();
@@ -118,6 +120,20 @@ export async function addQuestion(quizId: string, formData: FormData) {
     if (aErr) throw new Error(aErr.message);
   }
 
+  revalidatePath(`/quizzes/${quizId}`);
+}
+
+// Quiz behavior settings (exec). RLS re-enforces exec-only on the write.
+export async function updateQuizSettings(quizId: string, formData: FormData) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("quizzes")
+    .update({
+      shuffle_questions: formData.get("shuffle_questions") === "on",
+      show_correct_after: formData.get("show_correct_after") === "on",
+    })
+    .eq("id", quizId);
+  if (error) throw new Error(error.message);
   revalidatePath(`/quizzes/${quizId}`);
 }
 

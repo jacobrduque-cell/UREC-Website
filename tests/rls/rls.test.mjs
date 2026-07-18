@@ -50,8 +50,8 @@ before(async () => {
 
   // A published quiz + question, and a submission with a file.
   await db.query(
-    `insert into public.quizzes (id, course_id, title, published)
-       values ('11111111-0000-0000-0000-000000000001',$1,'Q1',true)`,
+    `insert into public.quizzes (id, course_id, title, published, show_correct_after)
+       values ('11111111-0000-0000-0000-000000000001',$1,'Q1',true,true)`,
     [course],
   );
   await db.query(
@@ -556,4 +556,32 @@ test("exec can read the numeric answer key", async () => {
   );
   assert.equal(r.ok, true);
   assert.equal(Number(r.rows[0].answer_text), 5.5);
+});
+
+// ---- Quiz review (submit-gated answers/explanations, 20260717003300) ----
+test("quiz_review returns the answer key to exec", async () => {
+  const r = await tryAsUser(
+    db,
+    EXEC,
+    `select count(*)::int n from public.quiz_review('11111111-0000-0000-0000-000000000001')`,
+  );
+  assert.equal(r.rows[0].n, 2);
+});
+
+test("quiz_review returns review to a member who HAS submitted (when enabled)", async () => {
+  const r = await tryAsUser(
+    db,
+    STU,
+    `select count(*)::int n from public.quiz_review('11111111-0000-0000-0000-000000000001')`,
+  );
+  assert.equal(r.rows[0].n, 2, "submitter should see the review");
+});
+
+test("quiz_review returns NOTHING to a member who has NOT submitted", async () => {
+  const r = await tryAsUser(
+    db,
+    OTHER,
+    `select count(*)::int n from public.quiz_review('11111111-0000-0000-0000-000000000001')`,
+  );
+  assert.equal(r.rows[0].n, 0, "answers must stay hidden until the member submits");
 });

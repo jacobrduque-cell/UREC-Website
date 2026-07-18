@@ -123,6 +123,16 @@ export function AddQuestionForm({
           </p>
         )}
 
+        <div>
+          <label className={smallLabel}>Explanation (optional)</label>
+          <textarea
+            name="explanation"
+            rows={2}
+            placeholder="Why the answer is what it is. Shown to members after they submit, if 'show answers after submitting' is on."
+            className={input}
+          />
+        </div>
+
         <SubmitButton
           pendingText="Adding…"
           className="self-start rounded-md bg-blue px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-sky"
