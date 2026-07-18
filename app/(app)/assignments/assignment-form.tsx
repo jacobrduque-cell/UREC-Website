@@ -143,7 +143,7 @@ export function AssignmentForm({
             htmlFor="unlock_at"
             className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted"
           >
-            Available from
+            Available from (optional)
           </label>
           <input
             id="unlock_at"
@@ -158,7 +158,7 @@ export function AssignmentForm({
             htmlFor="lock_at"
             className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted"
           >
-            Closes
+            Closes (optional)
           </label>
           <input
             id="lock_at"
@@ -170,9 +170,11 @@ export function AssignmentForm({
         </div>
       </div>
       <p className="-mt-2 text-xs text-muted">
-        Due drives the Late flag; students can submit until <em>Closes</em>{" "}
-        (leave blank to keep it open). <em>Available from</em> hides the
-        submit box until then.
+        Most assignments only need a <em>Due</em> date — leave the other two
+        blank. <em>Due</em> drives the Late flag; students can submit until{" "}
+        <em>Closes</em>, and <em>Available from</em> hides the submit box until
+        then. If you do set both, Available&nbsp;from must be earlier than
+        Closes.
       </p>
 
       <div>
