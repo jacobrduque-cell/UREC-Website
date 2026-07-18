@@ -18,6 +18,8 @@ type Assignment = {
   description: string | null;
   points_possible: number;
   due_at: string | null;
+  unlock_at: string | null;
+  lock_at: string | null;
   submission_type: "file" | "text" | "url" | "none";
   accepted_file_types: string[] | null;
   course_id: string;
@@ -68,7 +70,7 @@ export default async function AssignmentDetailPage({
   const { data: assignment } = await supabase
     .from("assignments")
     .select(
-      "id, title, description, points_possible, due_at, submission_type, accepted_file_types, course_id, allow_group_submission",
+      "id, title, description, points_possible, due_at, unlock_at, lock_at, submission_type, accepted_file_types, course_id, allow_group_submission",
     )
     .eq("id", id)
     .maybeSingle();
@@ -138,6 +140,11 @@ export default async function AssignmentDetailPage({
   const needsGroupToSubmit = !canManage && a.allow_group_submission && !myGroupId;
   const submitAction = submitAssignment.bind(null, id);
 
+  // Availability window (see submitAssignment, which enforces it server-side).
+  const now = Date.now();
+  const notYetOpen = a.unlock_at != null && now < new Date(a.unlock_at).getTime();
+  const closed = a.lock_at != null && now > new Date(a.lock_at).getTime();
+
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
       <Link href="/assignments" className="text-sm text-blue hover:underline">
@@ -150,6 +157,14 @@ export default async function AssignmentDetailPage({
 
       <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted">
         <span>{fmtDue(a.due_at)}</span>
+        {a.lock_at && (
+          <span className={closed ? "text-neg" : ""}>
+            {closed ? "Closed" : "Closes"} {fmtDue(a.lock_at)}
+          </span>
+        )}
+        {notYetOpen && a.unlock_at && (
+          <span className="text-[#B4531A]">Opens {fmtDue(a.unlock_at)}</span>
+        )}
         <span>{a.points_possible} pts</span>
         <span>
           Submitting:{" "}
@@ -244,7 +259,12 @@ export default async function AssignmentDetailPage({
             </p>
           )}
 
-          {needsGroupToSubmit ? (
+          {notYetOpen ? (
+            <p className="mt-4 text-sm text-muted">
+              This assignment isn&rsquo;t open for submissions yet — it opens{" "}
+              {fmtDue(a.unlock_at)}.
+            </p>
+          ) : needsGroupToSubmit ? (
             <p className="mt-4 text-sm text-muted">
               You&rsquo;re not in a group yet, so there&rsquo;s nowhere for
               your team&rsquo;s submission to go. Ask exec to add you to one
@@ -257,25 +277,37 @@ export default async function AssignmentDetailPage({
                 pointsPossible={a.points_possible}
                 assignmentId={id}
               />
-              <details className="mt-4">
-                <summary className="cursor-pointer text-sm text-blue hover:underline">
-                  Resubmit
-                </summary>
-                <form
-                  action={submitAction}
-                  encType="multipart/form-data"
-                  className="mt-4 flex flex-col gap-4"
-                >
-                  <SubmissionFields assignment={a} />
-                  <button
-                    type="submit"
-                    className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
-                  >
+              {closed ? (
+                <p className="mt-4 text-sm text-muted">
+                  Submissions closed {fmtDue(a.lock_at)} — this is your final
+                  submission.
+                </p>
+              ) : (
+                <details className="mt-4">
+                  <summary className="cursor-pointer text-sm text-blue hover:underline">
                     Resubmit
-                  </button>
-                </form>
-              </details>
+                  </summary>
+                  <form
+                    action={submitAction}
+                    encType="multipart/form-data"
+                    className="mt-4 flex flex-col gap-4"
+                  >
+                    <SubmissionFields assignment={a} />
+                    <button
+                      type="submit"
+                      className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
+                    >
+                      Resubmit
+                    </button>
+                  </form>
+                </details>
+              )}
             </>
+          ) : closed ? (
+            <p className="mt-4 text-sm text-neg">
+              Submissions for this assignment closed {fmtDue(a.lock_at)}. You
+              didn&rsquo;t submit.
+            </p>
           ) : (
             <form
               action={submitAction}

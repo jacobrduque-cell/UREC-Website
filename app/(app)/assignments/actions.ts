@@ -11,6 +11,8 @@ function parseAssignmentFields(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim();
   const pointsPossible = Number(formData.get("points_possible"));
   const dueAt = String(formData.get("due_at") ?? "");
+  const unlockAt = String(formData.get("unlock_at") ?? "");
+  const lockAt = String(formData.get("lock_at") ?? "");
   const submissionType = String(formData.get("submission_type") ?? "none");
   const acceptedFileTypesRaw = String(formData.get("accepted_file_types") ?? "").trim();
   const assignmentGroupId = String(formData.get("assignment_group_id") ?? "") || null;
@@ -26,11 +28,19 @@ function parseAssignmentFields(formData: FormData) {
     throw new Error("Invalid submission type.");
   }
 
+  const unlockIso = unlockAt ? new Date(unlockAt).toISOString() : null;
+  const lockIso = lockAt ? new Date(lockAt).toISOString() : null;
+  if (unlockIso && lockIso && new Date(unlockIso) >= new Date(lockIso)) {
+    throw new Error("The available-from date must be before the closes date.");
+  }
+
   return {
     title,
     description: description || null,
     points_possible: pointsPossible,
     due_at: dueAt ? new Date(dueAt).toISOString() : null,
+    unlock_at: unlockIso,
+    lock_at: lockIso,
     submission_type: submissionType,
     accepted_file_types: acceptedFileTypesRaw
       ? acceptedFileTypesRaw.split(",").map((t) => t.trim().replace(/^\./, "").toLowerCase()).filter(Boolean)
@@ -173,11 +183,21 @@ export async function submitAssignment(assignmentId: string, formData: FormData)
 
   const { data: assignment, error: aErr } = await supabase
     .from("assignments")
-    .select("id, course_id, submission_type, allow_group_submission")
+    .select("id, course_id, submission_type, allow_group_submission, unlock_at, lock_at")
     .eq("id", assignmentId)
     .single();
   if (aErr || !assignment) {
     throw new Error("Assignment not found.");
+  }
+
+  // Enforce the availability window server-side — the UI hides the form
+  // outside it, but a hand-crafted request must be rejected too.
+  const now = Date.now();
+  if (assignment.unlock_at && now < new Date(assignment.unlock_at).getTime()) {
+    throw new Error("This assignment isn't open for submissions yet.");
+  }
+  if (assignment.lock_at && now > new Date(assignment.lock_at).getTime()) {
+    throw new Error("Submissions for this assignment are closed.");
   }
 
   let bodyText: string | null = null;

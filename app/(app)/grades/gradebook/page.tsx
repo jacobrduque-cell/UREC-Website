@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getIsExec, getIsGrader, oneOrFirst } from "@/lib/data/queries";
 import { submissionStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/submission-status";
+import { overallPercent } from "@/lib/grade-weighting";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -16,7 +17,14 @@ type SubmissionRow = {
   submitted_at: string | null;
   grades: Grade | Grade[] | null;
 };
-type AssignmentCol = { id: string; title: string; points_possible: number; due_at: string | null };
+type AssignmentCol = {
+  id: string;
+  title: string;
+  points_possible: number;
+  due_at: string | null;
+  assignment_group_id: string | null;
+  assignment_group: { weight_pct: number } | null;
+};
 
 // The exec/grader gradebook: a students × assignments matrix. RLS
 // already lets exec and graders read every submission for a course, so
@@ -36,7 +44,7 @@ export default async function GradebookPage() {
       .eq("course_id", course.id),
     supabase
       .from("assignments")
-      .select("id, title, points_possible, due_at")
+      .select("id, title, points_possible, due_at, assignment_group_id, assignment_group:assignment_groups(weight_pct)")
       .eq("course_id", course.id)
       .eq("published", true)
       .order("due_at", { ascending: true, nullsFirst: false }),
@@ -90,18 +98,24 @@ export default async function GradebookPage() {
       (a.user!.full_name ?? a.user!.email).localeCompare(b.user!.full_name ?? b.user!.email),
     );
 
-  // Per-student running total across graded assignments only.
+  // Per-student running total, weighted by assignment-group weight_pct —
+  // the SAME calculation the student /grades page uses (shared helper), so
+  // the two views never disagree.
   function studentTotal(uid: string) {
-    let earned = 0;
-    let possible = 0;
+    const byCategory = new Map<string, { weight: number; earned: number; possible: number }>();
     for (const a of assignments) {
       const c = cell.get(`${a.id}:${uid}`);
-      if (c && c.grade != null) {
-        earned += c.grade;
-        possible += a.points_possible;
-      }
+      if (!c || c.grade == null) continue;
+      const weight = oneOrFirst(a.assignment_group)?.weight_pct ?? 0;
+      // Key by the group's identity (ungrouped pooled under "none"), so two
+      // distinct categories that happen to share a weight stay separate.
+      const key = a.assignment_group_id ?? "none";
+      if (!byCategory.has(key)) byCategory.set(key, { weight, earned: 0, possible: 0 });
+      const cat = byCategory.get(key)!;
+      cat.earned += c.grade;
+      cat.possible += a.points_possible;
     }
-    return possible > 0 ? (earned / possible) * 100 : null;
+    return overallPercent([...byCategory.values()]);
   }
 
   return (

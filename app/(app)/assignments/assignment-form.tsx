@@ -8,6 +8,8 @@ type ExistingAssignment = {
   description: string | null;
   points_possible: number;
   due_at: string | null;
+  unlock_at: string | null;
+  lock_at: string | null;
   submission_type: string;
   accepted_file_types: string[] | null;
   assignment_group_id: string | null;
@@ -114,21 +116,58 @@ export function AssignmentForm({
         </div>
       </div>
 
-      <div>
-        <label
-          htmlFor="due_at"
-          className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted"
-        >
-          Due (optional)
-        </label>
-        <input
-          id="due_at"
-          name="due_at"
-          type="datetime-local"
-          defaultValue={toDatetimeLocal(existing?.due_at ?? null)}
-          className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div>
+          <label
+            htmlFor="due_at"
+            className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted"
+          >
+            Due (optional)
+          </label>
+          <input
+            id="due_at"
+            name="due_at"
+            type="datetime-local"
+            defaultValue={toDatetimeLocal(existing?.due_at ?? null)}
+            className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor="unlock_at"
+            className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted"
+          >
+            Available from
+          </label>
+          <input
+            id="unlock_at"
+            name="unlock_at"
+            type="datetime-local"
+            defaultValue={toDatetimeLocal(existing?.unlock_at ?? null)}
+            className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor="lock_at"
+            className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted"
+          >
+            Closes
+          </label>
+          <input
+            id="lock_at"
+            name="lock_at"
+            type="datetime-local"
+            defaultValue={toDatetimeLocal(existing?.lock_at ?? null)}
+            className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
+          />
+        </div>
       </div>
+      <p className="-mt-2 text-xs text-muted">
+        Due drives the Late flag; students can submit until <em>Closes</em>{" "}
+        (leave blank to keep it open). <em>Available from</em> hides the
+        submit box until then.
+      </p>
 
       <div>
         <label

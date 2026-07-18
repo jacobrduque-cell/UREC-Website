@@ -18,7 +18,7 @@ export default async function EditAssignmentPage({
   const { data: assignment } = await supabase
     .from("assignments")
     .select(
-      "title, description, points_possible, due_at, submission_type, accepted_file_types, assignment_group_id, published, allow_group_submission, course_id",
+      "title, description, points_possible, due_at, unlock_at, lock_at, submission_type, accepted_file_types, assignment_group_id, published, allow_group_submission, course_id",
     )
     .eq("id", id)
     .maybeSingle();

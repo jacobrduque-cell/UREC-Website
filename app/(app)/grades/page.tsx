@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getIsExec, getIsGrader, oneOrFirst } from "@/lib/data/queries";
+import { overallPercent } from "@/lib/grade-weighting";
 import Link from "next/link";
 
 type Grade = { points_earned: number };
@@ -80,15 +81,10 @@ export default async function GradesPage() {
   const categoryList = [...categories.values()].sort(
     (a, b) => a.position - b.position,
   );
-  const gradedCategories = categoryList.filter((c) => c.hasGraded);
-  const totalWeight = gradedCategories.reduce((s, c) => s + c.weight, 0);
-  const weightedTotal =
-    totalWeight > 0
-      ? gradedCategories.reduce(
-          (s, c) => s + (c.earned / c.possible) * c.weight,
-          0,
-        ) / totalWeight
-      : null;
+  // Shared with the exec gradebook so the two views always agree.
+  const weightedTotal = overallPercent(
+    categoryList.map((c) => ({ weight: c.weight, earned: c.earned, possible: c.possible })),
+  );
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">

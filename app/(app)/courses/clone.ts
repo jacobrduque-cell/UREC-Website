@@ -116,7 +116,7 @@ export async function cloneCourseContent(
   const { data: assignments } = await db
     .from("assignments")
     .select(
-      "id, assignment_group_id, title, description, points_possible, due_at, submission_type, accepted_file_types, allow_group_submission, published",
+      "id, assignment_group_id, title, description, points_possible, due_at, unlock_at, lock_at, submission_type, accepted_file_types, allow_group_submission, published",
     )
     .eq("course_id", sourceCourseId);
   for (const a of assignments ?? []) {
@@ -127,6 +127,8 @@ export async function cloneCourseContent(
       description: a.description,
       points_possible: a.points_possible,
       due_at: shift(a.due_at),
+      unlock_at: shift(a.unlock_at),
+      lock_at: shift(a.lock_at),
       submission_type: a.submission_type,
       accepted_file_types: a.accepted_file_types,
       allow_group_submission: a.allow_group_submission,
