@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { useActionState } from "react";
 import { utcISOToPacificWallClock } from "@/lib/timezone";
 import { MarkdownField } from "../ui/markdown-field";
+import { SubmitButton } from "../ui/form-controls";
 
+type FormState = { error?: string };
 type AssignmentGroup = { id: string; name: string };
 type Rubric = { id: string; title: string };
 
@@ -32,15 +37,21 @@ export function AssignmentForm({
   existing,
   submitLabel,
 }: {
-  action: (formData: FormData) => void;
+  action: (prevState: FormState, formData: FormData) => Promise<FormState>;
   groups: AssignmentGroup[];
   rubrics: Rubric[];
   currentRubricId: string | null;
   existing?: ExistingAssignment;
   submitLabel: string;
 }) {
+  const [state, formAction] = useActionState(action, {});
   return (
-    <form action={action} className="mt-8 flex flex-col gap-5">
+    <form action={formAction} className="mt-8 flex flex-col gap-5">
+      {state?.error && (
+        <p className="rounded-md border border-neg/30 bg-[#fdecea] px-4 py-2.5 text-sm font-medium text-neg">
+          {state.error}
+        </p>
+      )}
       <div>
         <label
           htmlFor="title"
@@ -250,12 +261,12 @@ export function AssignmentForm({
         flips from off to on)
       </label>
 
-      <button
-        type="submit"
+      <SubmitButton
+        pendingText="Saving…"
         className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
       >
         {submitLabel}
-      </button>
+      </SubmitButton>
     </form>
   );
 }

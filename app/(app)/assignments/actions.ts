@@ -60,78 +60,101 @@ function parseAssignmentFields(formData: FormData) {
 // RLS re-enforces exec-only on assignments/assignment_rubrics writes
 // regardless of the UI gate on these pages — same pattern used
 // throughout (announcements, grades, wiki_pages).
-export async function createAssignment(formData: FormData) {
-  const supabase = await createClient();
-  const course = await getCurrentCourse();
-  if (!course) throw new Error("No active course found.");
+//
+// Returns { error } on failure (shown inline on the form) instead of
+// throwing, so a validation or DB problem doesn't blow up into the
+// generic "something went wrong" page with the real reason redacted.
+export async function createAssignment(
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  let newId = "";
+  try {
+    const supabase = await createClient();
+    const course = await getCurrentCourse();
+    if (!course) {
+      return { error: "No active course — open a course from the dashboard first, then create the assignment inside it." };
+    }
 
-  const fields = parseAssignmentFields(formData);
-  const { rubricId, ...assignmentFields } = fields;
+    const fields = parseAssignmentFields(formData);
+    const { rubricId, ...assignmentFields } = fields;
 
-  const { data: assignment, error } = await supabase
-    .from("assignments")
-    .insert({ course_id: course.id, ...assignmentFields })
-    .select("id")
-    .single();
-  if (error) throw new Error(error.message);
+    const { data: assignment, error } = await supabase
+      .from("assignments")
+      .insert({ course_id: course.id, ...assignmentFields })
+      .select("id")
+      .single();
+    if (error) return { error: error.message };
+    newId = assignment.id;
 
-  if (rubricId) {
-    const { error: rErr } = await supabase
-      .from("assignment_rubrics")
-      .insert({ assignment_id: assignment.id, rubric_id: rubricId });
-    if (rErr) throw new Error(rErr.message);
-  }
+    if (rubricId) {
+      const { error: rErr } = await supabase
+        .from("assignment_rubrics")
+        .insert({ assignment_id: newId, rubric_id: rubricId });
+      if (rErr) return { error: rErr.message };
+    }
 
-  if (fields.published) {
-    const memberIds = await getCourseMemberIds(course.id);
-    await notifyUsers(memberIds, {
-      type: "new_assignment",
-      title: `New assignment: ${fields.title}`,
-      relatedEntityType: "assignment",
-      relatedEntityId: assignment.id,
-    });
+    if (fields.published) {
+      const memberIds = await getCourseMemberIds(course.id);
+      await notifyUsers(memberIds, {
+        type: "new_assignment",
+        title: `New assignment: ${fields.title}`,
+        relatedEntityType: "assignment",
+        relatedEntityId: newId,
+      });
+    }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't create the assignment." };
   }
 
   revalidatePath("/assignments");
-  redirect(`/assignments/${assignment.id}`);
+  redirect(`/assignments/${newId}`);
 }
 
-export async function updateAssignment(assignmentId: string, formData: FormData) {
-  const supabase = await createClient();
+export async function updateAssignment(
+  assignmentId: string,
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient();
 
-  const { data: before } = await supabase
-    .from("assignments")
-    .select("published, course_id, title")
-    .eq("id", assignmentId)
-    .maybeSingle();
+    const { data: before } = await supabase
+      .from("assignments")
+      .select("published, course_id, title")
+      .eq("id", assignmentId)
+      .maybeSingle();
 
-  const fields = parseAssignmentFields(formData);
-  const { rubricId, ...assignmentFields } = fields;
+    const fields = parseAssignmentFields(formData);
+    const { rubricId, ...assignmentFields } = fields;
 
-  const { error } = await supabase
-    .from("assignments")
-    .update(assignmentFields)
-    .eq("id", assignmentId);
-  if (error) throw new Error(error.message);
+    const { error } = await supabase
+      .from("assignments")
+      .update(assignmentFields)
+      .eq("id", assignmentId);
+    if (error) return { error: error.message };
 
-  await supabase.from("assignment_rubrics").delete().eq("assignment_id", assignmentId);
-  if (rubricId) {
-    const { error: rErr } = await supabase
-      .from("assignment_rubrics")
-      .insert({ assignment_id: assignmentId, rubric_id: rubricId });
-    if (rErr) throw new Error(rErr.message);
-  }
+    await supabase.from("assignment_rubrics").delete().eq("assignment_id", assignmentId);
+    if (rubricId) {
+      const { error: rErr } = await supabase
+        .from("assignment_rubrics")
+        .insert({ assignment_id: assignmentId, rubric_id: rubricId });
+      if (rErr) return { error: rErr.message };
+    }
 
-  // Only notify on the transition from unpublished to published, not
-  // on every subsequent edit.
-  if (fields.published && before && !before.published) {
-    const memberIds = await getCourseMemberIds(before.course_id);
-    await notifyUsers(memberIds, {
-      type: "new_assignment",
-      title: `New assignment: ${fields.title}`,
-      relatedEntityType: "assignment",
-      relatedEntityId: assignmentId,
-    });
+    // Only notify on the transition from unpublished to published, not
+    // on every subsequent edit.
+    if (fields.published && before && !before.published) {
+      const memberIds = await getCourseMemberIds(before.course_id);
+      await notifyUsers(memberIds, {
+        type: "new_assignment",
+        title: `New assignment: ${fields.title}`,
+        relatedEntityType: "assignment",
+        relatedEntityId: assignmentId,
+      });
+    }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't save the assignment." };
   }
 
   revalidatePath("/assignments");
