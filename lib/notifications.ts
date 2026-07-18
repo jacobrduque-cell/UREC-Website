@@ -49,6 +49,26 @@ export async function notifyUsers(
     relatedEntityId?: string;
   },
 ) {
+  try {
+    await deliverNotifications(userIds, notification);
+  } catch (e) {
+    // A notification is a side effect — it must NEVER break the action
+    // that triggered it (creating an assignment, posting an announcement,
+    // grading, …). Log and move on.
+    console.error("notifyUsers failed:", e);
+  }
+}
+
+async function deliverNotifications(
+  userIds: string[],
+  notification: {
+    type: NotificationType;
+    title: string;
+    body?: string;
+    relatedEntityType?: string;
+    relatedEntityId?: string;
+  },
+) {
   if (userIds.length === 0) return;
   const admin = createAdminClient();
 
