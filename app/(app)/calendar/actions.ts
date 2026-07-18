@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse } from "@/lib/data/queries";
+import { pacificWallClockToUtcISO } from "@/lib/timezone";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createHash, randomBytes } from "node:crypto";
@@ -18,6 +19,13 @@ export async function createEvent(formData: FormData) {
     throw new Error("Title and start time are required.");
   }
 
+  // datetime-local values are Pacific wall-clock (see lib/timezone).
+  const startsIso = pacificWallClockToUtcISO(startsAt);
+  const endsIso = pacificWallClockToUtcISO(endsAt);
+  if (startsIso && endsIso && new Date(endsIso) < new Date(startsIso)) {
+    throw new Error("The end time can't be before the start time.");
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -30,8 +38,8 @@ export async function createEvent(formData: FormData) {
     course_id: scope === "platform" ? null : (course?.id ?? null),
     title,
     description: description || null,
-    starts_at: new Date(startsAt).toISOString(),
-    ends_at: endsAt ? new Date(endsAt).toISOString() : null,
+    starts_at: startsIso,
+    ends_at: endsIso,
     all_day: allDay,
     created_by: user.id,
   });

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getMyGroupIds } from "@/lib/data/queries";
+import { pacificWallClockToUtcISO } from "@/lib/timezone";
 import { getCourseMemberIds, notifyUsers } from "@/lib/notifications";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -28,8 +29,11 @@ function parseAssignmentFields(formData: FormData) {
     throw new Error("Invalid submission type.");
   }
 
-  const unlockIso = unlockAt ? new Date(unlockAt).toISOString() : null;
-  const lockIso = lockAt ? new Date(lockAt).toISOString() : null;
+  // datetime-local values are bare wall-clock strings; interpret them in
+  // the club's Pacific zone (not the UTC server runtime) so a deadline
+  // typed as 5:00 PM is stored and enforced as 5:00 PM Berkeley time.
+  const unlockIso = pacificWallClockToUtcISO(unlockAt);
+  const lockIso = pacificWallClockToUtcISO(lockAt);
   if (unlockIso && lockIso && new Date(unlockIso) >= new Date(lockIso)) {
     throw new Error("The available-from date must be before the closes date.");
   }
@@ -38,7 +42,7 @@ function parseAssignmentFields(formData: FormData) {
     title,
     description: description || null,
     points_possible: pointsPossible,
-    due_at: dueAt ? new Date(dueAt).toISOString() : null,
+    due_at: pacificWallClockToUtcISO(dueAt),
     unlock_at: unlockIso,
     lock_at: lockIso,
     submission_type: submissionType,

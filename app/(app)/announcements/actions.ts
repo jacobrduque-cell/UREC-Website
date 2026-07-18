@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse } from "@/lib/data/queries";
 import { getCourseMemberIds, notifyUsers } from "@/lib/notifications";
+import { pacificWallClockToUtcISO } from "@/lib/timezone";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
@@ -17,8 +18,12 @@ export async function createAnnouncement(formData: FormData) {
     throw new Error("Title and body are required.");
   }
 
+  // publish_at is a Pacific wall-clock datetime-local value (see
+  // lib/timezone) — parse it in the club zone so "schedule for 9 AM"
+  // means 9 AM Berkeley, not 9 AM UTC (2 AM Pacific).
   const now = new Date();
-  const publishAt = publishAtRaw ? new Date(publishAtRaw) : now;
+  const publishIso = pacificWallClockToUtcISO(publishAtRaw);
+  const publishAt = publishIso ? new Date(publishIso) : now;
   const isScheduledForLater = publishAt.getTime() > now.getTime();
 
   const supabase = await createClient();

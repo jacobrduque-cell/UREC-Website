@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { utcISOToPacificWallClock } from "@/lib/timezone";
 
 type AssignmentGroup = { id: string; name: string };
 type Rubric = { id: string; title: string };
@@ -17,12 +18,10 @@ type ExistingAssignment = {
   allow_group_submission: boolean;
 };
 
-function toDatetimeLocal(iso: string | null) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
+// Render the stored UTC instant as a Pacific wall-clock string so the
+// edit form shows the same time the exec entered — using the local
+// server/browser zone here would drift the prefill by the UTC offset.
+const toDatetimeLocal = utcISOToPacificWallClock;
 
 export function AssignmentForm({
   action,
