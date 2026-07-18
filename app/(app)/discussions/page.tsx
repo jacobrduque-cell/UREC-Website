@@ -9,7 +9,8 @@ type TopicRow = {
   body: string;
   created_at: string;
   author: { full_name: string | null; email: string } | null;
-  discussion_replies: { id: string }[];
+  // PostgREST aggregate — a single count row, not every reply id.
+  discussion_replies: { count: number }[];
 };
 
 export default async function DiscussionsPage() {
@@ -20,7 +21,7 @@ export default async function DiscussionsPage() {
     ? await supabase
         .from("discussion_topics")
         .select(
-          "id, title, body, created_at, author:users(full_name, email), discussion_replies(id)",
+          "id, title, body, created_at, author:users(full_name, email), discussion_replies(count)",
         )
         .eq("course_id", course.id)
         .order("created_at", { ascending: false })
@@ -48,8 +49,8 @@ export default async function DiscussionsPage() {
             </Link>
             <p className="mt-0.5 text-xs text-muted">
               {t.author?.full_name ?? t.author?.email ?? "Unknown"} &middot;{" "}
-              {t.discussion_replies.length} repl
-              {t.discussion_replies.length === 1 ? "y" : "ies"} &middot;{" "}
+              {(t.discussion_replies[0]?.count ?? 0)} repl
+              {(t.discussion_replies[0]?.count ?? 0) === 1 ? "y" : "ies"} &middot;{" "}
               {new Date(t.created_at).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles",  month: "short", day: "numeric" })}
             </p>
           </li>

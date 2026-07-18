@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getMyGroupIds } from "@/lib/data/queries";
 import { pacificWallClockToUtcISO } from "@/lib/timezone";
+import { assertUploadSize } from "@/lib/uploads";
 import { getCourseMemberIds, notifyUsers } from "@/lib/notifications";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -284,6 +285,7 @@ export async function submitAssignment(assignmentId: string, formData: FormData)
     if (!file || file.size === 0) {
       throw new Error("Choose a file to upload.");
     }
+    assertUploadSize(file);
 
     const path = `${assignmentId}/${user.id}/${Date.now()}-${file.name}`;
     const { error: upErr } = await supabase.storage

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse } from "@/lib/data/queries";
+import { assertUploadSize } from "@/lib/uploads";
 import { revalidatePath } from "next/cache";
 
 export async function createFolder(
@@ -29,6 +30,7 @@ export async function createFolder(
 export async function uploadFile(folderId: string | null, formData: FormData) {
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) throw new Error("Choose a file to upload.");
+  assertUploadSize(file);
 
   const supabase = await createClient();
   const {

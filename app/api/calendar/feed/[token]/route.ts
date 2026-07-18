@@ -67,6 +67,11 @@ export async function GET(
     canSeeCourseEvents = Boolean(enrollment) || Boolean(execRow);
   }
 
+  // Only publish roughly the last two months plus everything upcoming.
+  // Calendar apps re-fetch this feed on every poll, so an unbounded
+  // multi-year history would grow without limit across cohorts and get
+  // re-serialized to all ~115 subscribers on each refresh.
+  const lowerBound = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
   const { data: events } = await admin
     .from("calendar_events")
     .select("id, title, description, starts_at, ends_at, all_day, course_id")
@@ -75,6 +80,7 @@ export async function GET(
         ? `course_id.eq.${course.id},course_id.is.null`
         : "course_id.is.null",
     )
+    .gte("starts_at", lowerBound)
     .order("starts_at", { ascending: true });
 
   const ics = buildIcs(course?.name ?? "UREC Platform", events ?? []);
