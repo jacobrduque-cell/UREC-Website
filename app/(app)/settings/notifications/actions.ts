@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 const TYPES = ["new_announcement", "new_assignment", "assignment_graded", "assignment_due_soon"];
 const CHANNELS = new Set(["email", "in_app", "off"]);
@@ -28,4 +29,5 @@ export async function saveNotificationPrefs(formData: FormData) {
   if (error) throw new Error(error.message);
 
   revalidatePath("/settings/notifications");
+  redirect("/settings/notifications?saved=1");
 }

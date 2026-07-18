@@ -15,7 +15,12 @@ const CHANNELS: { value: string; label: string }[] = [
   { value: "off", label: "Off" },
 ];
 
-export default async function NotificationSettingsPage() {
+export default async function NotificationSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ saved?: string }>;
+}) {
+  const { saved } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -37,6 +42,12 @@ export default async function NotificationSettingsPage() {
         Choose how you hear about each kind of update. Email also shows in-app; the default is
         email.
       </p>
+
+      {saved && (
+        <p className="mt-4 rounded-md border border-pos/30 bg-[#e6f4ea] px-4 py-2.5 text-sm font-medium text-pos">
+          Preferences saved.
+        </p>
+      )}
 
       <form action={saveNotificationPrefs} className="mt-8 flex flex-col gap-5">
         {TYPES.map((t) => {

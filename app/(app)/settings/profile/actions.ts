@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 // Save the signed-in member's own profile. RLS (users_update_self)
 // restricts the update to their own row on top of the id filter here.
@@ -47,4 +48,8 @@ export async function saveProfile(formData: FormData) {
 
   revalidatePath("/settings/profile");
   revalidatePath("/directory");
+  // Bounce back with a flag so the page can confirm the save — an
+  // in-place server action otherwise just re-renders identical fields and
+  // leaves the member unsure whether it worked.
+  redirect("/settings/profile?saved=1");
 }

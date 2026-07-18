@@ -15,7 +15,12 @@ type Profile = {
 const field = "mt-1 w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue";
 const label = "block text-xs font-semibold uppercase tracking-wide text-muted";
 
-export default async function ProfileSettingsPage() {
+export default async function ProfileSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ saved?: string }>;
+}) {
+  const { saved } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -35,6 +40,12 @@ export default async function ProfileSettingsPage() {
       <p className="mt-2 text-sm text-muted">
         This is what other members see in the Directory. Everything except your name is optional.
       </p>
+
+      {saved && (
+        <p className="mt-4 rounded-md border border-pos/30 bg-[#e6f4ea] px-4 py-2.5 text-sm font-medium text-pos">
+          Profile saved.
+        </p>
+      )}
 
       <form action={saveProfile} className="mt-8 flex flex-col gap-5">
         <div>
