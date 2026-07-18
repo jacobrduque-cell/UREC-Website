@@ -1,0 +1,190 @@
+// RLS invariant tests. Runs the full migration chain against a throwaway
+// Postgres, seeds a small fixture (exec + two students + a course + a
+// quiz + a file submission), and asserts the security boundaries that
+// matter. Run with: npm run test:rls  (needs a local/CI Postgres — see
+// harness.mjs for the PG* env vars).
+
+import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import { freshDb, tryAsUser } from "./harness.mjs";
+
+const EXEC = "00000000-0000-0000-0000-0000000000e1";
+const STU = "00000000-0000-0000-0000-0000000000a1"; // enrolled analyst
+const OTHER = "00000000-0000-0000-0000-0000000000a2"; // enrolled analyst
+const OUTSIDER = "00000000-0000-0000-0000-0000000000b1"; // signed in, not enrolled
+
+let db;
+let course;
+
+before(async () => {
+  db = await freshDb();
+
+  // Fixture users: insert into auth.users so the handle_new_auth_user
+  // trigger creates the matching public.users rows (public.users.id FKs
+  // to auth.users, so we can't insert profiles directly).
+  await db.query(
+    `insert into auth.users (id, email, raw_user_meta_data) values
+       ($1,'exec@berkeley.edu','{"full_name":"Exec"}'::jsonb),
+       ($2,'stu@berkeley.edu','{"full_name":"Student"}'::jsonb),
+       ($3,'other@berkeley.edu','{"full_name":"Other"}'::jsonb),
+       ($4,'outsider@berkeley.edu','{"full_name":"Outsider"}'::jsonb)`,
+    [EXEC, STU, OTHER, OUTSIDER],
+  );
+  await db.query(
+    `insert into public.account_roles (user_id, role_id)
+       select $1, id from public.roles where name='Co-President'`,
+    [EXEC],
+  );
+
+  const { rows } = await db.query(`select id from public.courses limit 1`);
+  course = rows[0].id;
+  // Publish it, as exec would — an unpublished (draft) course is
+  // deliberately invisible to enrolled students.
+  await db.query(`update public.courses set published = true where id = $1`, [course]);
+  const analyst = (await db.query(`select id from public.roles where name='Analyst'`)).rows[0].id;
+
+  await db.query(
+    `insert into public.enrollments (user_id, course_id, role_id) values ($1,$3,$4),($2,$3,$4)`,
+    [STU, OTHER, course, analyst],
+  );
+
+  // A published quiz + question, and a submission with a file.
+  await db.query(
+    `insert into public.quizzes (id, course_id, title, published)
+       values ('11111111-0000-0000-0000-000000000001',$1,'Q1',true)`,
+    [course],
+  );
+  await db.query(
+    `insert into public.quiz_submissions (id, quiz_id, user_id, score, submitted_at)
+       values ('33333333-0000-0000-0000-000000000001','11111111-0000-0000-0000-000000000001',$1,0,now())`,
+    [STU],
+  );
+  await db.query(
+    `insert into public.assignment_groups (id, course_id, name, weight_pct, position)
+       values ('44444444-0000-0000-0000-000000000001',$1,'HW',100,0)`,
+    [course],
+  );
+  await db.query(
+    `insert into public.assignments (id, course_id, assignment_group_id, title, submission_type, points_possible, published)
+       values ('55555555-0000-0000-0000-000000000001',$1,'44444444-0000-0000-0000-000000000001','HW1','file',100,true)`,
+    [course],
+  );
+  await db.query(
+    `insert into public.submissions (id, assignment_id, user_id, submitted_at)
+       values ('66666666-0000-0000-0000-000000000001','55555555-0000-0000-0000-000000000001',$1,now())`,
+    [STU],
+  );
+  await db.query(
+    `insert into public.files (id, course_id, uploaded_by, storage_path, filename, published)
+       values ('77777777-0000-0000-0000-000000000001',$1,$2,'55555555-0000-0000-0000-000000000001/x/secret.pdf','Secret.pdf',false)`,
+    [course, STU],
+  );
+  await db.query(
+    `insert into public.submission_files (submission_id, file_id)
+       values ('66666666-0000-0000-0000-000000000001','77777777-0000-0000-0000-000000000001')`,
+  );
+  await db.query(
+    `insert into public.files (id, course_id, uploaded_by, storage_path, filename, published)
+       values ('77777777-0000-0000-0000-000000000002',$1,$2,'folder/syllabus.pdf','Syllabus.pdf',true)`,
+    [course, EXEC],
+  );
+});
+
+after(async () => {
+  if (db) await db.end();
+});
+
+// ---- Course visibility ----
+test("enrolled student can read their course", async () => {
+  const r = await tryAsUser(db, STU, `select count(*)::int n from public.courses where id=$1`, [course]);
+  assert.equal(r.rows[0].n, 1);
+});
+
+test("outsider cannot read a course they're not enrolled in", async () => {
+  const r = await tryAsUser(db, OUTSIDER, `select count(*)::int n from public.courses where id=$1`, [course]);
+  assert.equal(r.rows[0].n, 0);
+});
+
+test("exec can read any course", async () => {
+  const r = await tryAsUser(db, EXEC, `select count(*)::int n from public.courses where id=$1`, [course]);
+  assert.equal(r.rows[0].n, 1);
+});
+
+// ---- Quiz score integrity (fix: 20260717001700) ----
+test("student CANNOT update their own quiz score", async () => {
+  await tryAsUser(db, STU, `update public.quiz_submissions set score=999 where user_id=$1`, [STU]);
+  const { rows } = await db.query(`select score from public.quiz_submissions where user_id=$1`, [STU]);
+  assert.equal(Number(rows[0].score), 0, "score must stay 0 — student write must be denied");
+});
+
+test("student CANNOT insert a quiz_submission with an inflated score", async () => {
+  const r = await tryAsUser(
+    db, STU,
+    `insert into public.quiz_submissions (quiz_id,user_id,score,submitted_at)
+       values ('11111111-0000-0000-0000-000000000001',$1,999,now())`,
+    [STU],
+  );
+  assert.equal(r.ok, false, "insert should be blocked by RLS");
+});
+
+test("student can still READ their own quiz submission", async () => {
+  const r = await tryAsUser(db, STU, `select count(*)::int n from public.quiz_submissions where user_id=$1`, [STU]);
+  assert.equal(r.rows[0].n, 1);
+});
+
+test("exec can write a quiz score", async () => {
+  const r = await tryAsUser(db, EXEC, `update public.quiz_submissions set score=10 where user_id=$1`, [STU]);
+  assert.equal(r.ok, true);
+  assert.equal(r.rowCount, 1);
+});
+
+// ---- Submission-file metadata privacy (fix: 20260717001800) ----
+test("another enrolled member CANNOT read a classmate's submission file metadata", async () => {
+  const r = await tryAsUser(db, OTHER, `select count(*)::int n from public.files where filename='Secret.pdf'`);
+  assert.equal(r.rows[0].n, 0);
+});
+
+test("the submitter CAN read their own submission file metadata", async () => {
+  const r = await tryAsUser(db, STU, `select count(*)::int n from public.files where filename='Secret.pdf'`);
+  assert.equal(r.rows[0].n, 1);
+});
+
+test("exec CAN read submission file metadata", async () => {
+  const r = await tryAsUser(db, EXEC, `select count(*)::int n from public.files where filename='Secret.pdf'`);
+  assert.equal(r.rows[0].n, 1);
+});
+
+test("published course files stay readable by any enrolled member", async () => {
+  const r = await tryAsUser(db, OTHER, `select count(*)::int n from public.files where filename='Syllabus.pdf'`);
+  assert.equal(r.rows[0].n, 1);
+});
+
+// ---- Grades are exec-write-only ----
+test("student cannot insert their own grade", async () => {
+  const r = await tryAsUser(
+    db, STU,
+    `insert into public.grades (submission_id, points_earned, graded_by)
+       values ('66666666-0000-0000-0000-000000000001', 100, $1)`,
+    [STU],
+  );
+  assert.equal(r.ok, false, "grades write must be exec-only");
+});
+
+// ---- Pending-enrollment trigger (fix: 20260717001600) ----
+test("signup trigger redeems a pending enrollment into a real one", async () => {
+  const analyst = (await db.query(`select id from public.roles where name='Analyst'`)).rows[0].id;
+  await db.query(
+    `insert into public.pending_enrollments (email, course_id, role_id) values ('newbie@berkeley.edu',$1,$2)`,
+    [course, analyst],
+  );
+  // Simulate first sign-in: insert into auth.users fires handle_new_auth_user.
+  const newId = "00000000-0000-0000-0000-0000000000c1";
+  await db.query(
+    `insert into auth.users (id, email, raw_user_meta_data) values ($1,'NewBie@berkeley.edu','{}'::jsonb)`,
+    [newId],
+  );
+  const enr = await db.query(`select count(*)::int n from public.enrollments where user_id=$1 and course_id=$2`, [newId, course]);
+  assert.equal(enr.rows[0].n, 1, "pending enrollment should convert on signup (case-insensitive)");
+  const pend = await db.query(`select count(*)::int n from public.pending_enrollments where lower(email)='newbie@berkeley.edu'`);
+  assert.equal(pend.rows[0].n, 0, "pending row should be cleared after redemption");
+});
