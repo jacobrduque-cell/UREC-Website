@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { utcISOToPacificWallClock } from "@/lib/timezone";
+import { MarkdownField } from "../ui/markdown-field";
 
 type AssignmentGroup = { id: string; name: string };
 type Rubric = { id: string; title: string };
@@ -57,19 +58,14 @@ export function AssignmentForm({
       </div>
 
       <div>
-        <label
-          htmlFor="description"
-          className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted"
-        >
-          Description (HTML — headings/paragraphs/lists render via the same
-          rich-content style as everywhere else)
+        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">
+          Description
         </label>
-        <textarea
-          id="description"
+        <MarkdownField
           name="description"
           rows={8}
           defaultValue={existing?.description ?? ""}
-          className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 font-mono text-sm text-text outline-none focus:border-blue"
+          placeholder="Markdown supported. Use **bold**, lists, and Insert image to embed a rent roll, chart, or site map."
         />
       </div>
 

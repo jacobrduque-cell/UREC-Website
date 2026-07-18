@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getIsExec, getIsGrader, getMyGroupIds, getSignedFileUrl, oneOrFirst } from "@/lib/data/queries";
+import { renderMarkdown } from "@/lib/markdown";
 import { SubmitButton } from "../../ui/form-controls";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
@@ -192,7 +193,7 @@ export default async function AssignmentDetailPage({
       {a.description && (
         <div
           className="rich-content mt-6 max-w-prose text-sm text-text"
-          dangerouslySetInnerHTML={{ __html: a.description }}
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(a.description) }}
         />
       )}
 
