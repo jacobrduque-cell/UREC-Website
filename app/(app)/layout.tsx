@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getCurrentProfile, getIsExec } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { LayoutGrid, Bell, Settings } from "lucide-react";
+import { LayoutGrid, Bell, Mail, Settings } from "lucide-react";
 import { CourseSidebar } from "./course-sidebar";
 import { CourseTopBar } from "./course-topbar";
 
@@ -97,6 +97,9 @@ export default async function AppLayout({
           </RailLink>
           <RailLink href="/notifications" label="Alerts" badge={unreadCount ?? 0}>
             <Bell className="h-5 w-5" strokeWidth={1.75} />
+          </RailLink>
+          <RailLink href="/inbox" label="Inbox">
+            <Mail className="h-5 w-5" strokeWidth={1.75} />
           </RailLink>
           {isExec && (
             <RailLink href="/courses" label="Admin">

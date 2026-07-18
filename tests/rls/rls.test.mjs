@@ -143,6 +143,22 @@ before(async () => {
        values ('66666666-0000-0000-0000-000000000003','55555555-0000-0000-0000-000000000003',$1, now() - interval '2 day')`,
     [STU],
   );
+
+  // A private conversation between STU and EXEC (Inbox), for the
+  // messaging privacy boundary. OTHER is enrolled but NOT a participant.
+  await db.query(
+    `insert into public.conversations (id, subject) values ('aaaaaaaa-0000-0000-0000-000000000001','Plans')`,
+  );
+  await db.query(
+    `insert into public.conversation_participants (conversation_id, user_id) values
+       ('aaaaaaaa-0000-0000-0000-000000000001',$1),('aaaaaaaa-0000-0000-0000-000000000001',$2)`,
+    [STU, EXEC],
+  );
+  await db.query(
+    `insert into public.messages (conversation_id, author_id, body)
+       values ('aaaaaaaa-0000-0000-0000-000000000001',$1,'secret plans')`,
+    [STU],
+  );
 });
 
 after(async () => {
@@ -450,4 +466,62 @@ test("exec CAN still read the quiz answer key", async () => {
 test("outsider sees no answer options through the view", async () => {
   const r = await tryAsUser(db, OUTSIDER, `select count(*)::int n from public.quiz_answer_options`);
   assert.equal(r.rows[0].n, 0);
+});
+
+// ---- Inbox / conversation privacy (Phase 9) ----
+test("conversation participant can read its messages", async () => {
+  const r = await tryAsUser(
+    db,
+    STU,
+    `select count(*)::int n from public.messages where conversation_id='aaaaaaaa-0000-0000-0000-000000000001'`,
+  );
+  assert.equal(r.rows[0].n, 1);
+});
+
+test("non-participant cannot read a conversation's messages", async () => {
+  const r = await tryAsUser(
+    db,
+    OTHER,
+    `select count(*)::int n from public.messages where conversation_id='aaaaaaaa-0000-0000-0000-000000000001'`,
+  );
+  assert.equal(r.rows[0].n, 0, "messages must be participant-only");
+});
+
+test("non-participant cannot see the conversation itself", async () => {
+  const r = await tryAsUser(
+    db,
+    OTHER,
+    `select count(*)::int n from public.conversations where id='aaaaaaaa-0000-0000-0000-000000000001'`,
+  );
+  assert.equal(r.rows[0].n, 0);
+});
+
+test("a member can start a conversation, add a recipient, and post the first message", async () => {
+  const count = await asUser(db, STU, async (c) => {
+    const convo = (
+      await c.query(
+        `insert into public.conversations (subject, created_by) values ('New',$1) returning id`,
+        [STU],
+      )
+    ).rows[0].id;
+    // First participant (self) allowed on an empty conversation…
+    await c.query(
+      `insert into public.conversation_participants (conversation_id, user_id) values ($1,$2)`,
+      [convo, STU],
+    );
+    // …then, now a participant, we can add the recipient…
+    await c.query(
+      `insert into public.conversation_participants (conversation_id, user_id) values ($1,$2)`,
+      [convo, OTHER],
+    );
+    // …and post the opening message.
+    await c.query(
+      `insert into public.messages (conversation_id, author_id, body) values ($1,$2,'hi')`,
+      [convo, STU],
+    );
+    return (
+      await c.query(`select count(*)::int n from public.messages where conversation_id=$1`, [convo])
+    ).rows[0].n;
+  });
+  assert.equal(count, 1, "the start-conversation flow must pass RLS end to end");
 });

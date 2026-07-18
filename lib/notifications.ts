@@ -6,7 +6,8 @@ type NotificationType =
   | "new_announcement"
   | "new_assignment"
   | "assignment_graded"
-  | "assignment_due_soon";
+  | "assignment_due_soon"
+  | "new_message";
 
 // Best-effort deep link per notification type so the email's button lands
 // somewhere useful rather than always the dashboard.
@@ -19,6 +20,8 @@ function linkForType(type: NotificationType): string {
       return "/assignments";
     case "assignment_graded":
       return "/grades";
+    case "new_message":
+      return "/inbox";
     default:
       return "/dashboard";
   }
