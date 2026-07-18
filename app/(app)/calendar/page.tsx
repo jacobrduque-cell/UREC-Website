@@ -121,7 +121,7 @@ export default async function CalendarPage({
         </h2>
         <ul className="mt-2 divide-y divide-hair border-t border-hair">
           {upcoming.map((e) => (
-            <EventRow key={e.id} event={e} />
+            <EventRow key={e.id} event={e} isExec={isExec} />
           ))}
           {upcoming.length === 0 && (
             <li className="py-4 text-sm text-muted">No upcoming events.</li>
@@ -136,7 +136,7 @@ export default async function CalendarPage({
           </h2>
           <ul className="mt-2 divide-y divide-hair border-t border-hair opacity-60">
             {past.map((e) => (
-              <EventRow key={e.id} event={e} />
+              <EventRow key={e.id} event={e} isExec={isExec} />
             ))}
           </ul>
         </div>
@@ -145,7 +145,7 @@ export default async function CalendarPage({
   );
 }
 
-function EventRow({ event }: { event: EventRow }) {
+function EventRow({ event, isExec }: { event: EventRow; isExec: boolean }) {
   return (
     <li className="py-3.5">
       <div className="flex items-baseline justify-between gap-4">
@@ -157,11 +157,22 @@ function EventRow({ event }: { event: EventRow }) {
       {event.description && (
         <p className="mt-1 text-sm text-muted">{event.description}</p>
       )}
-      {event.course_id === null && (
-        <span className="mt-1.5 inline-block rounded-full border border-hair px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-          Platform-wide
-        </span>
-      )}
+      <div className="mt-1.5 flex items-center gap-3">
+        {event.course_id === null && (
+          <span className="inline-block rounded-full border border-hair px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+            Platform-wide
+          </span>
+        )}
+        {/* Attendance is per-course; platform-wide events have no roster. */}
+        {isExec && event.course_id !== null && (
+          <Link
+            href={`/calendar/${event.id}/attendance`}
+            className="text-xs font-medium text-blue hover:underline"
+          >
+            Take attendance
+          </Link>
+        )}
+      </div>
     </li>
   );
 }

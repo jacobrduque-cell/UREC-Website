@@ -88,6 +88,13 @@ before(async () => {
        values ('77777777-0000-0000-0000-000000000002',$1,$2,'folder/syllabus.pdf','Syllabus.pdf',true)`,
     [course, EXEC],
   );
+
+  // A course meeting to take attendance at.
+  await db.query(
+    `insert into public.calendar_events (id, course_id, title, starts_at, created_by)
+       values ('88888888-0000-0000-0000-000000000001',$1,'GM 1', now(), $2)`,
+    [course, EXEC],
+  );
 });
 
 after(async () => {
@@ -168,6 +175,41 @@ test("student cannot insert their own grade", async () => {
     [STU],
   );
   assert.equal(r.ok, false, "grades write must be exec-only");
+});
+
+// ---- Attendance (20260717001900) ----
+const EVENT = "88888888-0000-0000-0000-000000000001";
+
+test("exec can record attendance", async () => {
+  const r = await tryAsUser(
+    db, EXEC,
+    `insert into public.attendance_records (event_id, user_id, status, recorded_by)
+       values ($1,$2,'present',$3)`,
+    [EVENT, STU, EXEC],
+  );
+  assert.equal(r.ok, true);
+});
+
+test("a member cannot record attendance", async () => {
+  const r = await tryAsUser(
+    db, STU,
+    `insert into public.attendance_records (event_id, user_id, status) values ($1,$2,'present')`,
+    [EVENT, STU],
+  );
+  assert.equal(r.ok, false, "attendance write must be exec-only");
+});
+
+test("a member sees their own attendance but not a classmate's", async () => {
+  // Persist a record as superuser for the read checks.
+  await db.query(
+    `insert into public.attendance_records (event_id, user_id, status)
+       values ($1,$2,'present') on conflict (event_id,user_id) do nothing`,
+    [EVENT, STU],
+  );
+  const own = await tryAsUser(db, STU, `select count(*)::int n from public.attendance_records where user_id=$1`, [STU]);
+  assert.equal(own.rows[0].n, 1);
+  const other = await tryAsUser(db, OTHER, `select count(*)::int n from public.attendance_records where user_id=$1`, [STU]);
+  assert.equal(other.rows[0].n, 0);
 });
 
 // ---- Pending-enrollment trigger (fix: 20260717001600) ----
