@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getIsExec, getIsGrader, getSignedFileUrl, oneOrFirst } from "@/lib/data/queries";
+import { getIsExec, getIsGrader, getMyGroupIds, getSignedFileUrl, oneOrFirst } from "@/lib/data/queries";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { addSubmissionComment, submitAssignment } from "../actions";
@@ -95,13 +95,13 @@ export default async function AssignmentDetailPage({
 
   let myGroupId: string | null = null;
   if (!canManage && a.allow_group_submission) {
-    const { data: membership } = await supabase
-      .from("group_memberships")
-      .select("group_id, group:groups!inner(course_id)")
-      .eq("user_id", user.id)
-      .eq("group.course_id", a.course_id)
-      .maybeSingle();
-    myGroupId = membership?.group_id ?? null;
+    // A member can be in more than one group in a course, so this must
+    // not use .maybeSingle() (which errors on 2+ rows, wrongly reporting
+    // "you're not in a group" and blocking submission). Pick the first
+    // group deterministically — the submit action resolves it the same
+    // way, so the viewed submission and the write target always match.
+    const groupIds = await getMyGroupIds(a.course_id);
+    myGroupId = groupIds[0] ?? null;
   }
 
   const submissionColumns = `id, submitted_at, body_text, url,

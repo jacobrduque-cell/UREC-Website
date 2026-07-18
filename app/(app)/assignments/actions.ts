@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentCourse } from "@/lib/data/queries";
+import { getCurrentCourse, getMyGroupIds } from "@/lib/data/queries";
 import { getCourseMemberIds, notifyUsers } from "@/lib/notifications";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -213,21 +213,20 @@ export async function submitAssignment(assignmentId: string, formData: FormData)
 
   // Group assignments submit/grade once per team instead of once per
   // person — find the student's group for this course (Directory →
-  // Manage Groups is where exec assigns this).
+  // Manage Groups is where exec assigns this). A member can belong to
+  // more than one group in a course, so resolve the full list (not
+  // .maybeSingle(), which errors on 2+ rows and would wrongly block the
+  // submission) and pick the first — the same deterministic group the
+  // assignment page shows the current submission for.
   let groupId: string | null = null;
   if (assignment.allow_group_submission) {
-    const { data: membership } = await supabase
-      .from("group_memberships")
-      .select("group_id, group:groups!inner(course_id)")
-      .eq("user_id", user.id)
-      .eq("group.course_id", assignment.course_id)
-      .maybeSingle();
-    if (!membership) {
+    const groupIds = await getMyGroupIds(assignment.course_id);
+    if (groupIds.length === 0) {
       throw new Error(
         "This assignment submits once per team, and you're not in a group yet — ask exec to add you to one.",
       );
     }
-    groupId = membership.group_id;
+    groupId = groupIds[0];
   }
 
   // One current row per student (or per group) per assignment

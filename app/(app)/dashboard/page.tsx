@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/data/queries";
+import { getCurrentProfile, getMyGroupIds, submissionOwnerFilter } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Megaphone, ClipboardList, MessagesSquare, Folder, BookMarked } from "lucide-react";
@@ -10,7 +10,7 @@ type CourseCard = {
   code: string | null;
   term: { name: string } | null;
 };
-type DueRow = { id: string; title: string; due_at: string; points_possible: number; submissions: { id: string }[] };
+type DueRow = { id: string; title: string; due_at: string; points_possible: number };
 type EventRow = { id: string; title: string; starts_at: string };
 type FeedbackRow = { points_earned: number; graded_at: string; submission: { assignment: { title: string; points_possible: number } | null } | null };
 
@@ -32,9 +32,15 @@ export default async function DashboardPage() {
   const profile = await getCurrentProfile();
   const nowIso = new Date().toISOString();
 
+  // The viewer's group ids across every course, so team submissions
+  // (group_id set, user_id NULL) count as "done" and their feedback
+  // shows up — a user_id-only filter silently drops all of them.
+  const myGroupIds = await getMyGroupIds();
+  const ownerFilter = submissionOwnerFilter(user.id, myGroupIds);
+
   // RLS scopes `courses` to what this person can see (published +
   // enrolled, or everything for exec), so no extra filtering needed.
-  const [{ data: coursesData }, { data: dueData }, { data: eventData }, { data: feedbackData }] =
+  const [{ data: coursesData }, { data: dueData }, { data: eventData }, { data: mySubsData }] =
     await Promise.all([
       supabase
         .from("courses")
@@ -42,30 +48,43 @@ export default async function DashboardPage() {
         .order("created_at", { ascending: false }),
       supabase
         .from("assignments")
-        .select("id, title, due_at, points_possible, submissions(id)")
+        .select("id, title, due_at, points_possible")
         .eq("published", true)
         .gte("due_at", nowIso)
-        .eq("submissions.user_id", user.id)
         .order("due_at", { ascending: true })
-        .limit(5),
+        .limit(15),
       supabase
         .from("calendar_events")
         .select("id, title, starts_at")
         .gte("starts_at", nowIso)
         .order("starts_at", { ascending: true })
         .limit(5),
-      supabase
-        .from("grades")
-        .select("points_earned, graded_at, submission:submissions!inner(user_id, assignment:assignments(title, points_possible))")
-        .eq("submission.user_id", user.id)
-        .order("graded_at", { ascending: false })
-        .limit(5),
+      // Every submission this viewer owns (their own or their group's),
+      // used both to clear the To Do list and to pull recent feedback.
+      supabase.from("submissions").select("id, assignment_id").or(ownerFilter),
     ]);
 
   const courses = (coursesData ?? []) as unknown as CourseCard[];
-  const toDo = ((dueData ?? []) as unknown as DueRow[]).filter((a) => a.submissions.length === 0);
+  const mySubs = (mySubsData ?? []) as { id: string; assignment_id: string }[];
+  const submittedAssignmentIds = new Set(mySubs.map((s) => s.assignment_id));
+  const toDo = ((dueData ?? []) as unknown as DueRow[])
+    .filter((a) => !submittedAssignmentIds.has(a.id))
+    .slice(0, 5);
   const upcoming = (eventData ?? []) as unknown as EventRow[];
-  const feedback = (feedbackData ?? []) as unknown as FeedbackRow[];
+
+  // Recent feedback = grades on the viewer's own/group submissions.
+  const mySubmissionIds = mySubs.map((s) => s.id);
+  let feedback: FeedbackRow[] = [];
+  if (mySubmissionIds.length > 0) {
+    const { data: feedbackData } = await supabase
+      .from("grades")
+      .select("points_earned, graded_at, submission:submissions(assignment:assignments(title, points_possible))")
+      .in("submission_id", mySubmissionIds)
+      .not("graded_at", "is", null)
+      .order("graded_at", { ascending: false })
+      .limit(5);
+    feedback = (feedbackData ?? []) as unknown as FeedbackRow[];
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl px-8 py-10">

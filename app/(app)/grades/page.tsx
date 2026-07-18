@@ -35,10 +35,18 @@ export default async function GradesPage() {
     ? await supabase
         .from("assignments")
         .select(
-          `id, title, points_possible, assignment_group_id,
+          `id, title, points_possible, assignment_group_id, due_at,
              assignment_group:assignment_groups(name, weight_pct, position)`,
         )
         .eq("course_id", course.id)
+        // Match the exec gradebook exactly: only published assignments,
+        // in a stable order. Without the published filter an exec who's
+        // also enrolled would fold their own draft assignments into the
+        // weighted total and see a different number than the gradebook
+        // shows for them; without the order the table row order drifts
+        // between loads.
+        .eq("published", true)
+        .order("due_at", { ascending: true, nullsFirst: false })
     : { data: null };
 
   const assignments = (assignmentData ?? []) as unknown as AssignmentRow[];
@@ -76,6 +84,7 @@ export default async function GradesPage() {
   }
 
   type CategoryTotals = {
+    id: string;
     name: string;
     weight: number;
     position: number;
@@ -95,6 +104,7 @@ export default async function GradesPage() {
     const key = a.assignment_group_id ?? "ungrouped";
     if (!categories.has(key)) {
       categories.set(key, {
+        id: key,
         name,
         weight,
         position,
@@ -182,7 +192,7 @@ export default async function GradesPage() {
         <ul className="mt-3 flex flex-col gap-2">
           {categoryList.map((c) => (
             <li
-              key={c.name}
+              key={c.id}
               className="flex items-center justify-between text-sm"
             >
               <span className="text-text">

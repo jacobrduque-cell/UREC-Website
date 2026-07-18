@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
+import { getCurrentCourse, getIsExec, getMyGroupIds, submissionOwnerFilter } from "@/lib/data/queries";
 import { renderMarkdown } from "@/lib/markdown";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-type DueRow = { id: string; title: string; due_at: string; points_possible: number; submissions: { id: string }[] };
+type DueRow = { id: string; title: string; due_at: string; points_possible: number };
 type EventRow = { id: string; title: string; starts_at: string };
 type FeedbackRow = { points_earned: number; graded_at: string; submission: { assignment: { title: string; points_possible: number } | null } | null };
 
@@ -18,7 +18,13 @@ export default async function CourseHomePage() {
   const [course, isExec] = await Promise.all([getCurrentCourse(), getIsExec()]);
   const nowIso = new Date().toISOString();
 
-  const [{ data: homePage }, { data: dueData }, { data: eventData }, { data: feedbackData }] =
+  // Team submissions (group_id set, user_id NULL) belong to every group
+  // member — scope by the viewer's groups in THIS course so their To Do
+  // clears and their feedback shows for group work too.
+  const myGroupIds = course ? await getMyGroupIds(course.id) : [];
+  const ownerFilter = submissionOwnerFilter(user.id, myGroupIds);
+
+  const [{ data: homePage }, { data: dueData }, { data: eventData }, { data: courseAssignmentIds }] =
     await Promise.all([
       course
         ? supabase
@@ -31,13 +37,12 @@ export default async function CourseHomePage() {
       course
         ? supabase
             .from("assignments")
-            .select("id, title, due_at, points_possible, submissions(id)")
+            .select("id, title, due_at, points_possible")
             .eq("course_id", course.id)
             .eq("published", true)
             .gte("due_at", nowIso)
-            .eq("submissions.user_id", user.id)
             .order("due_at", { ascending: true })
-            .limit(5)
+            .limit(15)
         : Promise.resolve({ data: null }),
       course
         ? supabase
@@ -48,18 +53,45 @@ export default async function CourseHomePage() {
             .order("starts_at", { ascending: true })
             .limit(5)
         : Promise.resolve({ data: null }),
-      supabase
-        .from("grades")
-        .select("points_earned, graded_at, submission:submissions!inner(user_id, assignment:assignments(title, points_possible))")
-        .eq("submission.user_id", user.id)
-        .order("graded_at", { ascending: false })
-        .limit(5),
+      // Every assignment id in this course, so recent feedback stays
+      // scoped to the active course rather than leaking grades from a
+      // member's other/past courses.
+      course
+        ? supabase.from("assignments").select("id").eq("course_id", course.id)
+        : Promise.resolve({ data: null }),
     ]);
 
   const body = homePage?.body_markdown ?? "";
-  const toDo = ((dueData ?? []) as unknown as DueRow[]).filter((a) => a.submissions.length === 0);
+
+  // The viewer's own/group submissions within this course.
+  const assignmentIds = ((courseAssignmentIds ?? []) as { id: string }[]).map((a) => a.id);
+  let mySubs: { id: string; assignment_id: string }[] = [];
+  if (assignmentIds.length > 0) {
+    const { data: subsData } = await supabase
+      .from("submissions")
+      .select("id, assignment_id")
+      .in("assignment_id", assignmentIds)
+      .or(ownerFilter);
+    mySubs = (subsData ?? []) as { id: string; assignment_id: string }[];
+  }
+  const submittedAssignmentIds = new Set(mySubs.map((s) => s.assignment_id));
+  const toDo = ((dueData ?? []) as unknown as DueRow[])
+    .filter((a) => !submittedAssignmentIds.has(a.id))
+    .slice(0, 5);
   const upcoming = (eventData ?? []) as unknown as EventRow[];
-  const feedback = (feedbackData ?? []) as unknown as FeedbackRow[];
+
+  const mySubmissionIds = mySubs.map((s) => s.id);
+  let feedback: FeedbackRow[] = [];
+  if (mySubmissionIds.length > 0) {
+    const { data: feedbackData } = await supabase
+      .from("grades")
+      .select("points_earned, graded_at, submission:submissions(assignment:assignments(title, points_possible))")
+      .in("submission_id", mySubmissionIds)
+      .not("graded_at", "is", null)
+      .order("graded_at", { ascending: false })
+      .limit(5);
+    feedback = (feedbackData ?? []) as unknown as FeedbackRow[];
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-8 py-10 lg:flex-row">

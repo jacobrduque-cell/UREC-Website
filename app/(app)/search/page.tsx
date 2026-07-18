@@ -26,13 +26,29 @@ export default async function SearchPage({
   if (safe.length >= 2 && course) {
     const cid = course.id;
     const like = `%${safe}%`;
+
+    // People must be scoped to THIS course's roster — the users table is
+    // globally readable, so an unscoped search would surface members of
+    // other cohorts and contradict the "in <course>" framing. Resolve the
+    // course's enrolled user ids first (enrollments are roster-visible to
+    // every member), then match names/emails within that set.
+    const { data: enrolledRows } = await supabase
+      .from("enrollments")
+      .select("user_id")
+      .eq("course_id", cid);
+    const enrolledIds = [
+      ...new Set(((enrolledRows ?? []) as { user_id: string }[]).map((r) => r.user_id)),
+    ];
+
     const [ann, assign, pages, disc, files, people] = await Promise.all([
       supabase.from("announcements").select("id, title").eq("course_id", cid).or(`title.ilike.${like},body.ilike.${like}`).limit(6),
       supabase.from("assignments").select("id, title").eq("course_id", cid).or(`title.ilike.${like},description.ilike.${like}`).limit(6),
       supabase.from("wiki_pages").select("title, slug").eq("course_id", cid).or(`title.ilike.${like},body_markdown.ilike.${like}`).limit(6),
       supabase.from("discussion_topics").select("id, title").eq("course_id", cid).or(`title.ilike.${like},body.ilike.${like}`).limit(6),
       supabase.from("files").select("id, filename").eq("course_id", cid).eq("published", true).ilike("filename", like).limit(6),
-      supabase.from("users").select("id, full_name, email").or(`full_name.ilike.${like},email.ilike.${like}`).limit(6),
+      enrolledIds.length > 0
+        ? supabase.from("users").select("id, full_name, email").in("id", enrolledIds).or(`full_name.ilike.${like},email.ilike.${like}`).limit(6)
+        : Promise.resolve({ data: [] as { id: string; full_name: string | null; email: string }[] }),
     ]);
 
     const push = (rows: unknown[] | null, fn: (r: Record<string, unknown>) => Hit) =>

@@ -48,6 +48,47 @@ export async function getIsGrader(courseId: string): Promise<boolean> {
 }
 
 /**
+ * The viewer's group ids, optionally scoped to one course. Group
+ * (team) submissions store `group_id` and leave `user_id` NULL, so any
+ * "did I submit this?" / "my grades" / "my feedback" logic has to know
+ * the viewer's groups or it silently drops every team submission. One
+ * source of truth so /grades, the dashboard, and the course home all
+ * expand group submissions the same way. A member can be in more than
+ * one group in a course (a section study group AND a case-comp team),
+ * so this returns an array — never assume a single membership.
+ */
+export async function getMyGroupIds(courseId?: string): Promise<string[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+  let query = supabase
+    .from("group_memberships")
+    .select("group_id, group:groups!inner(course_id)")
+    .eq("user_id", user.id)
+    // Deterministic order so a member of two groups in one course
+    // always resolves to the SAME "first" group in the assignment page
+    // and the submit action — otherwise they could view one team's
+    // submission but write to the other's.
+    .order("group_id", { ascending: true });
+  if (courseId) query = query.eq("group.course_id", courseId);
+  const { data } = await query;
+  return ((data ?? []) as { group_id: string }[]).map((r) => r.group_id);
+}
+
+/**
+ * PostgREST `.or()` filter that matches a submission owned by this user
+ * OR by any of their groups. Keep the string free of spaces — PostgREST
+ * treats a space as the end of the filter.
+ */
+export function submissionOwnerFilter(userId: string, groupIds: string[]): string {
+  return groupIds.length > 0
+    ? `user_id.eq.${userId},group_id.in.(${groupIds.join(",")})`
+    : `user_id.eq.${userId}`;
+}
+
+/**
  * The active course — the one whose content (assignments, files,
  * modules, people, …) the whole app is currently scoped to. Each
  * course is fully separate; entering a course from the dashboard sets
