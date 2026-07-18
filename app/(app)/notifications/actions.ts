@@ -14,7 +14,13 @@ export async function markNotificationRead(
     .update({ read_at: new Date().toISOString() })
     .eq("id", notificationId);
   revalidatePath("/notifications");
-  if (redirectTo) redirect(redirectTo);
+  // Only ever redirect to an in-app path. Accepting an arbitrary string
+  // would be an open redirect (a crafted call could bounce the user to an
+  // external phishing page). A single leading slash — not "//", which is
+  // protocol-relative — means a same-origin path.
+  if (redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//")) {
+    redirect(redirectTo);
+  }
 }
 
 export async function markAllNotificationsRead() {

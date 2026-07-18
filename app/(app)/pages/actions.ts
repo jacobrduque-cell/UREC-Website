@@ -54,6 +54,12 @@ export async function updateWikiPage(slug: string, formData: FormData) {
   if (!title) throw new Error("Title is required.");
 
   const supabase = await createClient();
+  const course = await getCurrentCourse();
+  if (!course) throw new Error("No active course found.");
+
+  // Slugs are unique only PER course, so scope the update to the active
+  // course — otherwise editing e.g. "resources" would overwrite the
+  // identically-slugged page in every course cloned from this one.
   const { error } = await supabase
     .from("wiki_pages")
     .update({
@@ -62,6 +68,7 @@ export async function updateWikiPage(slug: string, formData: FormData) {
       published,
       updated_at: new Date().toISOString(),
     })
+    .eq("course_id", course.id)
     .eq("slug", slug);
   if (error) throw new Error(error.message);
 
@@ -75,9 +82,13 @@ export async function toggleWikiPublished(
   currentlyPublished: boolean,
 ) {
   const supabase = await createClient();
+  const course = await getCurrentCourse();
+  if (!course) throw new Error("No active course found.");
+
   const { error } = await supabase
     .from("wiki_pages")
     .update({ published: !currentlyPublished })
+    .eq("course_id", course.id)
     .eq("slug", slug);
   if (error) throw new Error(error.message);
 

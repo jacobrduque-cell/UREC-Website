@@ -105,9 +105,14 @@ export async function enrollMembers(formData: FormData) {
     }));
 
   if (enrollRows.length > 0) {
+    // Don't clobber existing members: re-pasting a roster to add a few
+    // new analysts must not silently downgrade someone already enrolled
+    // as a Grader (or reset their section) just because their email is in
+    // the box with a different role selected. Insert new enrollments only;
+    // changing an existing member's role/section is done per-row above.
     const { error } = await admin
       .from("enrollments")
-      .upsert(enrollRows, { onConflict: "user_id,course_id" });
+      .upsert(enrollRows, { onConflict: "user_id,course_id", ignoreDuplicates: true });
     if (error) throw new Error(error.message);
   }
   if (pendingRows.length > 0) {

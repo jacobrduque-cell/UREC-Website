@@ -1,7 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    serverActions: {
+      // File submissions and course-file uploads go through server
+      // actions. The default 1 MB body cap silently failed any real
+      // upload (a PDF deck, an XLSX model) with a generic error page.
+      // Match the submissions storage bucket's 25 MB limit.
+      bodySizeLimit: "25mb",
+    },
+  },
 };
 
 export default nextConfig;

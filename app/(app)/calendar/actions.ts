@@ -22,7 +22,8 @@ export async function createEvent(formData: FormData) {
   // datetime-local values are Pacific wall-clock (see lib/timezone).
   const startsIso = pacificWallClockToUtcISO(startsAt);
   const endsIso = pacificWallClockToUtcISO(endsAt);
-  if (startsIso && endsIso && new Date(endsIso) < new Date(startsIso)) {
+  if (!startsIso) throw new Error("Enter a valid start time.");
+  if (endsIso && new Date(endsIso) < new Date(startsIso)) {
     throw new Error("The end time can't be before the start time.");
   }
 
