@@ -104,7 +104,7 @@ export default async function AttendancePage({
             const uid = e.user!.id;
             const val = current.get(uid) ?? "";
             return (
-              <li key={uid} className="flex items-center justify-between gap-4 py-3">
+              <li key={uid} className="flex flex-col items-start gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-text">
                     {e.user!.full_name ?? e.user!.email}
@@ -113,7 +113,7 @@ export default async function AttendancePage({
                     <p className="truncate text-xs text-muted">{e.section.name}</p>
                   )}
                 </div>
-                <div className="flex flex-shrink-0 gap-1" role="radiogroup" aria-label="Status">
+                <div className="flex flex-wrap gap-1 sm:flex-shrink-0" role="radiogroup" aria-label="Status">
                   {STATUSES.map((s) => (
                     <label
                       key={s}

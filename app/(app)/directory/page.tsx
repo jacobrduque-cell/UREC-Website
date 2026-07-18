@@ -33,13 +33,14 @@ type Role = { id: string; name: string };
 export default async function DirectoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ section?: string }>;
+  searchParams: Promise<{ section?: string; q?: string }>;
 }) {
-  const [isExec, course, { section: sectionFilter }] = await Promise.all([
+  const [isExec, course, { section: sectionFilter, q: rawQuery }] = await Promise.all([
     getIsExec(),
     getCurrentCourse(),
     searchParams,
   ]);
+  const nameQuery = (rawQuery ?? "").trim().toLowerCase();
 
   const supabase = await createClient();
   const [{ data, error }, { data: sectionsData }, { data: rolesData }, { data: pendingData }] =
@@ -80,11 +81,21 @@ export default async function DirectoryPage({
   const roles = (rolesData ?? []) as unknown as Role[];
   const pending = (pendingData ?? []) as unknown as PendingRow[];
 
-  const rows = sectionFilter
+  const sectionRows = sectionFilter
     ? allRows.filter((r) =>
         sectionFilter === "none" ? !r.section : r.section?.id === sectionFilter,
       )
     : allRows;
+  const rows = nameQuery
+    ? sectionRows.filter((r) => {
+        const u = r.user!;
+        return (
+          (u.full_name ?? "").toLowerCase().includes(nameQuery) ||
+          u.email.toLowerCase().includes(nameQuery) ||
+          (u.major ?? "").toLowerCase().includes(nameQuery)
+        );
+      })
+    : sectionRows;
 
   return (
     <div className="mx-auto w-full max-w-4xl px-8 py-10">
@@ -223,7 +234,29 @@ export default async function DirectoryPage({
         </p>
       )}
 
-      <ul className="mt-6 divide-y divide-hair border-t border-hair">
+      <form action="/directory" className="mt-6">
+        {sectionFilter && <input type="hidden" name="section" value={sectionFilter} />}
+        <input
+          type="search"
+          name="q"
+          defaultValue={rawQuery ?? ""}
+          placeholder="Search this roster by name, email, or major…"
+          className="w-full rounded-md border border-hair bg-white px-4 py-2 text-sm text-text outline-none focus:border-blue"
+        />
+      </form>
+      {nameQuery && (
+        <p className="mt-2 text-xs text-muted">
+          {rows.length} match{rows.length === 1 ? "" : "es"} for &ldquo;{rawQuery}&rdquo; ·{" "}
+          <Link
+            href={sectionFilter ? `/directory?section=${sectionFilter}` : "/directory"}
+            className="text-blue hover:underline"
+          >
+            clear
+          </Link>
+        </p>
+      )}
+
+      <ul className="mt-4 divide-y divide-hair border-t border-hair">
         {rows.map((r) => {
           const sectionAction = assignSection.bind(null, r.id);
           const removeAction = removeEnrollment.bind(null, r.id);

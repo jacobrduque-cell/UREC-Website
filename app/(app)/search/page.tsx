@@ -45,7 +45,7 @@ export default async function SearchPage({
       supabase.from("assignments").select("id, title").eq("course_id", cid).or(`title.ilike.${like},description.ilike.${like}`).limit(6),
       supabase.from("wiki_pages").select("title, slug").eq("course_id", cid).or(`title.ilike.${like},body_markdown.ilike.${like}`).limit(6),
       supabase.from("discussion_topics").select("id, title").eq("course_id", cid).or(`title.ilike.${like},body.ilike.${like}`).limit(6),
-      supabase.from("files").select("id, filename").eq("course_id", cid).eq("published", true).ilike("filename", like).limit(6),
+      supabase.from("files").select("id, filename, folder_id").eq("course_id", cid).eq("published", true).ilike("filename", like).limit(6),
       enrolledIds.length > 0
         ? supabase.from("users").select("id, full_name, email").in("id", enrolledIds).or(`full_name.ilike.${like},email.ilike.${like}`).limit(6)
         : Promise.resolve({ data: [] as { id: string; full_name: string | null; email: string }[] }),
@@ -58,9 +58,15 @@ export default async function SearchPage({
     push(assign.data, (r) => ({ href: `/assignments/${r.id}`, title: String(r.title), kind: "Assignment" }));
     push(pages.data, (r) => ({ href: `/pages/${r.slug}`, title: String(r.title), kind: "Page" }));
     push(disc.data, (r) => ({ href: `/discussions/${r.id}`, title: String(r.title), kind: "Discussion" }));
-    push(files.data, (r) => ({ href: `/files`, title: String(r.filename), kind: "File" }));
+    push(files.data, (r) => ({
+      // Land in the folder the file actually lives in, not the Files root.
+      href: r.folder_id ? `/files/${r.folder_id}` : `/files`,
+      title: String(r.filename),
+      kind: "File",
+    }));
     push(people.data, (r) => ({
-      href: `/directory`,
+      // Open the roster pre-filtered to this person.
+      href: `/directory?q=${encodeURIComponent(String(r.full_name ?? r.email))}`,
       title: String(r.full_name ?? r.email),
       kind: "Person",
       sub: r.full_name ? String(r.email) : undefined,

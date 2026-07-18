@@ -30,10 +30,14 @@ type CriterionRow = { id: string; criterion: string; description: string; points
 
 export default async function GradeAssignmentPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ filter?: string }>;
 }) {
   const { id } = await params;
+  const { filter } = await searchParams;
+  const ungradedOnly = filter === "ungraded";
   const supabase = await createClient();
 
   const { data: assignment } = await supabase
@@ -70,6 +74,10 @@ export default async function GradeAssignmentPage({
   ]);
 
   const rows = (submissions ?? []) as unknown as SubmissionRow[];
+  const ungradedCount = rows.filter((r) => oneOrFirst(r.grades) == null).length;
+  const visibleRows = ungradedOnly
+    ? rows.filter((r) => oneOrFirst(r.grades) == null)
+    : rows;
   const rubric = oneOrFirst(rubricLink?.rubric as unknown) as
     | { id: string; rubric_criteria: CriterionRow[] }
     | undefined;
@@ -79,7 +87,7 @@ export default async function GradeAssignmentPage({
   // client + Storage round trip apiece) meant a 115-submission
   // assignment fired 115+ sequential sign requests before the page could
   // render.
-  const allPaths = rows.flatMap((s) => s.submission_files.map((sf) => sf.file.storage_path));
+  const allPaths = visibleRows.flatMap((s) => s.submission_files.map((sf) => sf.file.storage_path));
   const signedUrlByPath = new Map<string, string>();
   if (allPaths.length > 0) {
     const { data: signed } = await supabase.storage
@@ -104,11 +112,26 @@ export default async function GradeAssignmentPage({
       </h1>
       <p className="mt-2 text-sm text-muted">
         {rows.length} submission{rows.length === 1 ? "" : "s"} &middot;{" "}
-        {assignment.points_possible} pts possible
+        {ungradedCount} ungraded &middot; {assignment.points_possible} pts possible
       </p>
 
-      <ul className="mt-8 flex flex-col gap-5">
-        {rows.map((s) => (
+      <div className="mt-4 flex gap-2">
+        <Link
+          href={`/assignments/${id}/grade`}
+          className={`rounded-full border px-3 py-1 text-xs font-medium ${!ungradedOnly ? "border-blue bg-pale text-sky" : "border-hair text-muted"}`}
+        >
+          All ({rows.length})
+        </Link>
+        <Link
+          href={`/assignments/${id}/grade?filter=ungraded`}
+          className={`rounded-full border px-3 py-1 text-xs font-medium ${ungradedOnly ? "border-blue bg-pale text-sky" : "border-hair text-muted"}`}
+        >
+          Ungraded ({ungradedCount})
+        </Link>
+      </div>
+
+      <ul className="mt-6 flex flex-col gap-5">
+        {visibleRows.map((s) => (
           <SubmissionCard
             key={s.id}
             submission={s}
@@ -118,8 +141,12 @@ export default async function GradeAssignmentPage({
             signedUrlByPath={signedUrlByPath}
           />
         ))}
-        {rows.length === 0 && (
-          <li className="text-sm text-muted">No submissions yet.</li>
+        {visibleRows.length === 0 && (
+          <li className="text-sm text-muted">
+            {ungradedOnly && rows.length > 0
+              ? "Everything's graded. 🎉"
+              : "No submissions yet."}
+          </li>
         )}
       </ul>
     </div>
