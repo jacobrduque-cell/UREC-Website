@@ -97,12 +97,13 @@ export async function cloneCourseContent(
     rubricMap.set(r.id, newId);
     const { data: criteria } = await db
       .from("rubric_criteria")
-      .select("description, points, position")
+      .select("criterion, description, points, position")
       .eq("rubric_id", r.id);
     if (criteria && criteria.length) {
       const { error } = await db.from("rubric_criteria").insert(
         criteria.map((c) => ({
           rubric_id: newId,
+          criterion: c.criterion,
           description: c.description,
           points: c.points,
           position: c.position,

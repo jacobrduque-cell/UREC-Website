@@ -95,7 +95,7 @@ export default async function AnnouncementsPage() {
               <p className="mt-1.5 text-xs text-muted">
                 {a.author?.full_name ?? a.author?.email ?? "Unknown"}
                 {a.published_at &&
-                  ` · ${new Date(a.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
+                  ` · ${new Date(a.published_at).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles",  month: "short", day: "numeric" })}`}
               </p>
             </Link>
           </li>

@@ -50,7 +50,7 @@ export default async function DiscussionsPage() {
               {t.author?.full_name ?? t.author?.email ?? "Unknown"} &middot;{" "}
               {t.discussion_replies.length} repl
               {t.discussion_replies.length === 1 ? "y" : "ies"} &middot;{" "}
-              {new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              {new Date(t.created_at).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles",  month: "short", day: "numeric" })}
             </p>
           </li>
         ))}

@@ -9,8 +9,8 @@ type AssignmentRow = {
   title: string;
   points_possible: number;
   assignment_group: { name: string; weight_pct: number; position: number } | null;
-  submissions: { grades: Grade | Grade[] | null }[];
 };
+type SubmissionRow = { assignment_id: string; grades: Grade | Grade[] | null };
 
 export default async function GradesPage() {
   const course = await getCurrentCourse();
@@ -25,25 +25,54 @@ export default async function GradesPage() {
   ]);
   const canManage = isExec || isGrader;
 
-  // This is a personal "my grades" view, not a gradebook — the
-  // submissions embed is explicitly scoped to the viewer's own row so
-  // a grader/exec who happens to also be enrolled never sees someone
-  // else's grade mixed in (RLS alone now lets graders see every
-  // student's submissions, so it can't be relied on to narrow this).
-  const { data } =
-    course && user
-      ? await supabase
-          .from("assignments")
-          .select(
-            `id, title, points_possible,
-             assignment_group:assignment_groups(name, weight_pct, position),
-             submissions(grades(points_earned))`,
-          )
-          .eq("course_id", course.id)
-          .eq("submissions.user_id", user.id)
-      : { data: null };
+  // A personal "my grades" view. We scope submissions to the viewer
+  // explicitly (their own rows AND their group's) rather than via the
+  // embed — an exec/grader who's also enrolled would otherwise see every
+  // student's submission through RLS, and a plain member's group
+  // submissions (user_id null) would be missed by a user_id-only filter.
+  const { data: assignmentData } = course
+    ? await supabase
+        .from("assignments")
+        .select(
+          `id, title, points_possible,
+             assignment_group:assignment_groups(name, weight_pct, position)`,
+        )
+        .eq("course_id", course.id)
+    : { data: null };
 
-  const assignments = (data ?? []) as unknown as AssignmentRow[];
+  const assignments = (assignmentData ?? []) as unknown as AssignmentRow[];
+
+  // The viewer's group ids in this course, so group submissions count.
+  const myGroupIds: string[] = [];
+  if (course && user) {
+    const { data: gm } = await supabase
+      .from("group_memberships")
+      .select("group_id, group:groups!inner(course_id)")
+      .eq("user_id", user.id)
+      .eq("group.course_id", course.id);
+    for (const row of gm ?? []) myGroupIds.push((row as { group_id: string }).group_id);
+  }
+
+  // Grade per assignment for THIS viewer (own or group submission).
+  const gradeByAssignment = new Map<string, number>();
+  if (course && user && assignments.length > 0) {
+    const orFilter =
+      myGroupIds.length > 0
+        ? `user_id.eq.${user.id},group_id.in.(${myGroupIds.join(",")})`
+        : `user_id.eq.${user.id}`;
+    const { data: subs } = await supabase
+      .from("submissions")
+      .select("assignment_id, grades(points_earned)")
+      .in(
+        "assignment_id",
+        assignments.map((a) => a.id),
+      )
+      .or(orFilter);
+    for (const s of (subs ?? []) as unknown as SubmissionRow[]) {
+      const g = oneOrFirst(s.grades)?.points_earned;
+      if (g != null) gradeByAssignment.set(s.assignment_id, g);
+    }
+  }
 
   type CategoryTotals = {
     name: string;
@@ -69,7 +98,7 @@ export default async function GradesPage() {
         hasGraded: false,
       });
     }
-    const grade = oneOrFirst(a.submissions[0]?.grades)?.points_earned;
+    const grade = gradeByAssignment.get(a.id);
     if (grade != null) {
       const cat = categories.get(name)!;
       cat.earned += grade;
@@ -115,7 +144,7 @@ export default async function GradesPage() {
           </thead>
           <tbody>
             {assignments.map((a) => {
-              const grade = oneOrFirst(a.submissions[0]?.grades)?.points_earned;
+              const grade = gradeByAssignment.get(a.id);
               return (
                 <tr key={a.id} className="border-t border-hair">
                   <td className="px-4 py-2.5 text-text">

@@ -71,7 +71,7 @@ export default async function AttendancePage({
       <h1 className="mt-2 font-display text-2xl font-bold text-navy-deep">Attendance</h1>
       <p className="mt-1 text-sm text-muted">
         {event.title} &middot;{" "}
-        {new Date(event.starts_at).toLocaleString("en-US", {
+        {new Date(event.starts_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles", 
           weekday: "short",
           month: "short",
           day: "numeric",

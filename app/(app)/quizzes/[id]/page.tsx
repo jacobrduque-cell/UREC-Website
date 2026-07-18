@@ -111,7 +111,7 @@ export default async function QuizDetailPage({
             <span className="text-sm text-muted"> / {totalPts} pts</span>
           </p>
           <p className="mt-1 text-xs text-muted">
-            Submitted {new Date(mySubmission.submitted_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}.
+            Submitted {new Date(mySubmission.submitted_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles",  month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}.
             {questions.some((q) => q.question_type === "short_answer" || q.question_type === "essay") &&
               " Written answers are reviewed by exec and may adjust your score."}
           </p>

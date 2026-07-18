@@ -15,25 +15,23 @@ type AssignmentRow = {
 
 function fmtDue(iso: string | null) {
   if (!iso) return "No due date";
-  return `Due ${new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
+  return `Due ${new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles",  month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
 }
 
 export default async function AssignmentsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const [course, isExec] = await Promise.all([getCurrentCourse(), getIsExec()]);
   const isGrader = course ? await getIsGrader(course.id) : false;
   const canManage = isExec || isGrader;
 
-  // Graders/exec see every student's submissions (for the "N submitted"
-  // count); everyone else's embed is explicitly scoped to their own row
-  // so it can never show someone else's grade — RLS alone now lets
-  // graders see the whole course's submissions, so this can't rely on
-  // RLS narrowing it down implicitly the way it used to for plain members.
-  let query = course
+  // For a plain member, RLS already scopes the embedded submissions to
+  // their own rows AND their group's rows (submissions_select_own_or_exec),
+  // so we do NOT filter by user_id here — doing so would drop group
+  // submissions (user_id is null on those) and wrongly show them as
+  // Missing. Graders/exec get every submission (used only for the
+  // "N submitted" count), which is fine — they don't see the status pills.
+  const query = course
     ? supabase
         .from("assignments")
         .select(
@@ -44,9 +42,6 @@ export default async function AssignmentsPage() {
         .eq("course_id", course.id)
         .order("due_at", { ascending: true })
     : null;
-  if (query && !canManage && user) {
-    query = query.eq("submissions.user_id", user.id);
-  }
   const { data } = query ? await query : { data: null };
 
   const assignments = (data ?? []) as unknown as AssignmentRow[];

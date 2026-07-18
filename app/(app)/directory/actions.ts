@@ -107,13 +107,13 @@ export async function enrollMembers(formData: FormData) {
   if (enrollRows.length > 0) {
     const { error } = await admin
       .from("enrollments")
-      .upsert(enrollRows, { onConflict: "user_id, course_id" });
+      .upsert(enrollRows, { onConflict: "user_id,course_id" });
     if (error) throw new Error(error.message);
   }
   if (pendingRows.length > 0) {
     const { error } = await admin
       .from("pending_enrollments")
-      .upsert(pendingRows, { onConflict: "email, course_id" });
+      .upsert(pendingRows, { onConflict: "email,course_id" });
     if (error) throw new Error(error.message);
   }
 

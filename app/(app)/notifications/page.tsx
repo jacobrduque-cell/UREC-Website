@@ -64,7 +64,7 @@ export default async function NotificationsPage() {
               </div>
               {n.body && <p className="mt-1 text-sm text-muted">{n.body}</p>}
               <p className="mt-1 text-xs text-muted">
-                {new Date(n.created_at).toLocaleString("en-US", {
+                {new Date(n.created_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles", 
                   month: "short",
                   day: "numeric",
                   hour: "numeric",

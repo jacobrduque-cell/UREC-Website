@@ -150,7 +150,7 @@ async function SubmissionCard({
           </p>
           <p className="mt-0.5 text-xs text-muted">
             Submitted{" "}
-            {new Date(submission.submitted_at).toLocaleString("en-US", {
+            {new Date(submission.submitted_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles", 
               month: "short",
               day: "numeric",
               hour: "numeric",
@@ -276,7 +276,7 @@ async function SubmissionCard({
                 <p>{c.body}</p>
                 <p className="mt-1 text-xs text-muted">
                   {c.author?.full_name ?? c.author?.email ?? "Unknown"} &middot;{" "}
-                  {new Date(c.created_at).toLocaleString("en-US", {
+                  {new Date(c.created_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles", 
                     month: "short",
                     day: "numeric",
                     hour: "numeric",

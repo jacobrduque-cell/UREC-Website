@@ -36,7 +36,7 @@ function fmt(iso: string, allDay: boolean) {
         hour: "numeric",
         minute: "2-digit",
       };
-  return d.toLocaleString("en-US", opts);
+  return d.toLocaleString("en-US", { timeZone: "America/Los_Angeles", ...opts });
 }
 
 export default async function CalendarPage({

@@ -44,9 +44,19 @@ type Submission = {
   submission_comments: Comment[];
 };
 
+// Plain helper (not a component) so reading the current time doesn't trip
+// React's purity check on the component body.
+function windowState(unlockAt: string | null, lockAt: string | null) {
+  const now = Date.now();
+  return {
+    notYetOpen: unlockAt != null && now < new Date(unlockAt).getTime(),
+    closed: lockAt != null && now > new Date(lockAt).getTime(),
+  };
+}
+
 function fmtDue(iso: string | null) {
   if (!iso) return "No due date";
-  return new Date(iso).toLocaleString("en-US", {
+  return new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles",
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -140,10 +150,10 @@ export default async function AssignmentDetailPage({
   const needsGroupToSubmit = !canManage && a.allow_group_submission && !myGroupId;
   const submitAction = submitAssignment.bind(null, id);
 
-  // Availability window (see submitAssignment, which enforces it server-side).
-  const now = Date.now();
-  const notYetOpen = a.unlock_at != null && now < new Date(a.unlock_at).getTime();
-  const closed = a.lock_at != null && now > new Date(a.lock_at).getTime();
+  // Availability window (see submitAssignment, which enforces it
+  // server-side). Computed in a plain helper so the current-time read
+  // doesn't trip React's component-purity lint.
+  const { notYetOpen, closed } = windowState(a.unlock_at, a.lock_at);
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
@@ -442,7 +452,7 @@ async function SubmissionSummary({
 
       <p className="mt-4 text-xs text-muted">
         Submitted{" "}
-        {new Date(submission.submitted_at).toLocaleString("en-US", {
+        {new Date(submission.submitted_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles", 
           month: "short",
           day: "numeric",
           hour: "numeric",
@@ -461,7 +471,7 @@ async function SubmissionSummary({
                 <p>{c.body}</p>
                 <p className="mt-1 text-xs text-muted">
                   {c.author?.full_name ?? c.author?.email ?? "Unknown"} &middot;{" "}
-                  {new Date(c.created_at).toLocaleString("en-US", {
+                  {new Date(c.created_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles", 
                     month: "short",
                     day: "numeric",
                     hour: "numeric",

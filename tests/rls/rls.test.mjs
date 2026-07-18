@@ -95,6 +95,32 @@ before(async () => {
        values ('88888888-0000-0000-0000-000000000001',$1,'GM 1', now(), $2)`,
     [course, EXEC],
   );
+
+  // A group with STU as a member, a group assignment, a group submission
+  // (user_id null, group_id set) and a grade on it — the shape the
+  // student grades/assignments pages must resolve for team work.
+  await db.query(
+    `insert into public.groups (id, course_id, name) values ('99999999-0000-0000-0000-000000000001',$1,'Team A')`,
+    [course],
+  );
+  await db.query(
+    `insert into public.group_memberships (group_id, user_id) values ('99999999-0000-0000-0000-000000000001',$1)`,
+    [STU],
+  );
+  await db.query(
+    `insert into public.assignments (id, course_id, assignment_group_id, title, submission_type, points_possible, published, allow_group_submission)
+       values ('55555555-0000-0000-0000-000000000002',$1,'44444444-0000-0000-0000-000000000001','Team HW','text',50,true,true)`,
+    [course],
+  );
+  await db.query(
+    `insert into public.submissions (id, assignment_id, group_id, submitted_at)
+       values ('66666666-0000-0000-0000-000000000002','55555555-0000-0000-0000-000000000002','99999999-0000-0000-0000-000000000001', now())`,
+  );
+  await db.query(
+    `insert into public.grades (submission_id, points_earned, graded_by)
+       values ('66666666-0000-0000-0000-000000000002', 45, $1)`,
+    [EXEC],
+  );
 });
 
 after(async () => {
@@ -175,6 +201,29 @@ test("student cannot insert their own grade", async () => {
     [STU],
   );
   assert.equal(r.ok, false, "grades write must be exec-only");
+});
+
+// ---- Group submissions are visible to teammates (grades fix) ----
+test("a group member can read their team's submission and its grade", async () => {
+  const sub = await tryAsUser(
+    db, STU,
+    `select count(*)::int n from public.submissions where group_id='99999999-0000-0000-0000-000000000001'`,
+  );
+  assert.equal(sub.rows[0].n, 1, "teammate must see the group submission");
+  const grade = await tryAsUser(
+    db, STU,
+    `select points_earned from public.grades where submission_id='66666666-0000-0000-0000-000000000002'`,
+  );
+  assert.equal(grade.rows.length, 1);
+  assert.equal(Number(grade.rows[0].points_earned), 45);
+});
+
+test("a non-member cannot read another team's submission", async () => {
+  const r = await tryAsUser(
+    db, OUTSIDER,
+    `select count(*)::int n from public.submissions where group_id='99999999-0000-0000-0000-000000000001'`,
+  );
+  assert.equal(r.rows[0].n, 0);
 });
 
 // ---- Attendance (20260717001900) ----

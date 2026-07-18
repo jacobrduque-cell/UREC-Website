@@ -430,14 +430,27 @@ export async function addSubmissionComment(
 
   const { data: submission } = await supabase
     .from("submissions")
-    .select("user_id")
+    .select("user_id, group_id")
     .eq("id", submissionId)
     .maybeSingle();
 
-  // Only notify the student when a grader/exec comments, not the other
-  // way around (they already know they just wrote it).
-  if (submission?.user_id && submission.user_id !== user.id) {
-    await notifyUsers([submission.user_id], {
+  // Notify the submitter(s) — for a group submission that's every
+  // teammate (same fan-out gradeSubmission uses) — but never the person
+  // who just wrote the comment.
+  let recipientIds: string[] = [];
+  if (submission?.user_id) {
+    recipientIds = [submission.user_id];
+  } else if (submission?.group_id) {
+    const { data: members } = await supabase
+      .from("group_memberships")
+      .select("user_id")
+      .eq("group_id", submission.group_id);
+    recipientIds = (members ?? []).map((m) => m.user_id);
+  }
+  recipientIds = recipientIds.filter((id) => id !== user.id);
+
+  if (recipientIds.length > 0) {
+    await notifyUsers(recipientIds, {
       type: "assignment_graded",
       title: "New comment on your submission",
       body: body.slice(0, 140),

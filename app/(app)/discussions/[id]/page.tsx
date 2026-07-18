@@ -19,7 +19,7 @@ type Reply = {
 };
 
 function fmt(iso: string) {
-  return new Date(iso).toLocaleString("en-US", {
+  return new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles", 
     month: "short",
     day: "numeric",
     hour: "numeric",

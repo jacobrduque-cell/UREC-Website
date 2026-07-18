@@ -140,7 +140,7 @@ export default async function DashboardPage() {
                     </Link>
                     <p className="text-xs text-muted">
                       {a.points_possible} pts &middot; Due{" "}
-                      {new Date(a.due_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      {new Date(a.due_at).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles",  month: "short", day: "numeric" })}
                     </p>
                   </li>
                 ))}
@@ -157,7 +157,7 @@ export default async function DashboardPage() {
                   <li key={e.id} className="text-sm">
                     <p className="font-medium text-text">{e.title}</p>
                     <p className="text-xs text-muted">
-                      {new Date(e.starts_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                      {new Date(e.starts_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles",  month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                     </p>
                   </li>
                 ))}
