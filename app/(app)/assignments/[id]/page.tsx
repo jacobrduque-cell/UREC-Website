@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getIsExec, getIsGrader, getMyGroupIds, getSignedFileUrl, oneOrFirst } from "@/lib/data/queries";
+import { SubmitButton } from "../../ui/form-controls";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { addSubmissionComment, submitAssignment } from "../actions";
@@ -303,12 +304,12 @@ export default async function AssignmentDetailPage({
                     className="mt-4 flex flex-col gap-4"
                   >
                     <SubmissionFields assignment={a} />
-                    <button
-                      type="submit"
+                    <SubmitButton
+                      pendingText="Submitting…"
                       className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
                     >
                       Resubmit
-                    </button>
+                    </SubmitButton>
                   </form>
                 </details>
               )}
@@ -325,12 +326,12 @@ export default async function AssignmentDetailPage({
               className="mt-4 flex flex-col gap-4"
             >
               <SubmissionFields assignment={a} />
-              <button
-                type="submit"
+              <SubmitButton
+                pendingText="Submitting…"
                 className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
               >
                 Submit Assignment
-              </button>
+              </SubmitButton>
             </form>
           )}
         </div>

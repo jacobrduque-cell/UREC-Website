@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse } from "@/lib/data/queries";
 import Link from "next/link";
 import { createTopic } from "./actions";
+import { SubmitButton } from "../ui/form-controls";
 
 type TopicRow = {
   id: string;
@@ -78,12 +79,12 @@ export default async function DiscussionsPage() {
             placeholder="What do you want to discuss?"
             className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
           />
-          <button
-            type="submit"
+          <SubmitButton
+            pendingText="Posting…"
             className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
           >
             Post Topic
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </div>

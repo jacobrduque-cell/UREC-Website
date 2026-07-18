@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createDiscussionReply } from "../actions";
+import { SubmitButton } from "../../ui/form-controls";
 
 type Topic = {
   id: string;
@@ -104,12 +105,12 @@ export default async function DiscussionDetailPage({
             placeholder="Add a reply…"
             className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
           />
-          <button
-            type="submit"
+          <SubmitButton
+            pendingText="Posting…"
             className="self-start rounded-md bg-blue px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-sky"
           >
             Reply
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </div>
@@ -144,12 +145,12 @@ function ReplyCard({
               placeholder="Reply to this…"
               className="w-full rounded-md border border-hair bg-white px-3 py-1.5 text-sm text-text outline-none focus:border-blue"
             />
-            <button
-              type="submit"
+            <SubmitButton
+              pendingText="Posting…"
               className="self-start rounded-md border border-hair px-3 py-1 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
             >
               Post reply
-            </button>
+            </SubmitButton>
           </form>
         </details>
       )}
