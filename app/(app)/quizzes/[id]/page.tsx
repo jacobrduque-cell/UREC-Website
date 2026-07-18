@@ -98,11 +98,19 @@ export default async function QuizDetailPage({
           </p>
         </div>
         {isExec && (
-          <form action={toggleQuizPublished.bind(null, id, quiz.published)}>
-            <button className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]">
-              {quiz.published ? "Unpublish" : "Publish"}
-            </button>
-          </form>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <Link
+              href={`/quizzes/${id}/submissions`}
+              className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
+            >
+              Submissions
+            </Link>
+            <form action={toggleQuizPublished.bind(null, id, quiz.published)}>
+              <button className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]">
+                {quiz.published ? "Unpublish" : "Publish"}
+              </button>
+            </form>
+          </div>
         )}
       </div>
 

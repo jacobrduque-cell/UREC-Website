@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentCourse } from "@/lib/data/queries";
+import { getCurrentCourse, getIsExec, oneOrFirst } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
@@ -170,4 +170,53 @@ export async function submitQuiz(quizId: string, formData: FormData) {
 
   revalidatePath(`/quizzes/${quizId}`);
   redirect(`/quizzes/${quizId}`);
+}
+
+/**
+ * Exec grades the written (short-answer/essay) responses on one quiz
+ * submission, awarding points per response, then recomputes the total
+ * score = auto-graded MC/TF points + awarded written points. Exec-gated
+ * in code and re-enforced by RLS (quiz_responses/quiz_submissions are
+ * exec-write). Auto-graded question scoring is never touched here.
+ */
+export async function gradeQuizResponses(
+  quizSubmissionId: string,
+  quizId: string,
+  formData: FormData,
+) {
+  const supabase = await createClient();
+  if (!(await getIsExec())) throw new Error("Only exec can grade quizzes.");
+
+  const { data: responses } = await supabase
+    .from("quiz_responses")
+    .select("id, is_correct, question:quiz_questions(points, question_type)")
+    .eq("quiz_submission_id", quizSubmissionId);
+
+  let score = 0;
+  for (const r of responses ?? []) {
+    const q = oneOrFirst(r.question) as { points: number; question_type: string } | undefined;
+    const pts = Number(q?.points ?? 0);
+    const type = q?.question_type;
+    if (type === "multiple_choice" || type === "true_false") {
+      if (r.is_correct) score += pts;
+    } else {
+      const raw = Number(formData.get(`award_${r.id}`));
+      const awarded = Number.isNaN(raw) ? 0 : Math.min(Math.max(raw, 0), pts);
+      const { error } = await supabase
+        .from("quiz_responses")
+        .update({ points_awarded: awarded })
+        .eq("id", r.id);
+      if (error) throw new Error(error.message);
+      score += awarded;
+    }
+  }
+
+  const { error: sErr } = await supabase
+    .from("quiz_submissions")
+    .update({ score })
+    .eq("id", quizSubmissionId);
+  if (sErr) throw new Error(sErr.message);
+
+  revalidatePath(`/quizzes/${quizId}/submissions`);
+  revalidatePath(`/quizzes/${quizId}`);
 }
