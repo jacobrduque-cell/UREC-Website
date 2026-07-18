@@ -28,6 +28,15 @@ export function CourseTopBar({ courseLabel }: { courseLabel: string }) {
         </Link>
         <PageCrumb />
       </nav>
+      <form action="/search" className="ml-auto hidden sm:block">
+        <input
+          type="search"
+          name="q"
+          placeholder="Search course…"
+          aria-label="Search course"
+          className="w-40 rounded-md border border-hair bg-white px-3 py-1.5 text-xs text-text outline-none transition-[width] focus:w-56 focus:border-blue"
+        />
+      </form>
     </header>
   );
 }

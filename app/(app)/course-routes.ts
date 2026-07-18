@@ -15,6 +15,7 @@ export const COURSE_ROUTES = [
   "/grades",
   "/files",
   "/calendar",
+  "/search",
 ];
 
 export function isCourseRoute(pathname: string): boolean {
