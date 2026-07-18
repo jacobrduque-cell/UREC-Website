@@ -31,14 +31,21 @@ export default async function AssignmentsPage() {
   // submissions (user_id is null on those) and wrongly show them as
   // Missing. Graders/exec get every submission (used only for the
   // "N submitted" count), which is fine — they don't see the status pills.
+  // Managers only need a submission COUNT per assignment, so don't also
+  // pull every submission's grade — at 115 members × dozens of
+  // assignments that embed materialized thousands of rows on every page
+  // load. Members get the fuller embed (RLS scopes it to just their own
+  // and their group's rows, so it stays tiny) to render a status pill.
+  const manageSelect = `id, title, points_possible, due_at,
+           assignment_group:assignment_groups(name, position),
+           submissions(id)`;
+  const memberSelect = `id, title, points_possible, due_at,
+           assignment_group:assignment_groups(name, position),
+           submissions(id, submitted_at, grades(points_earned))`;
   const query = course
     ? supabase
         .from("assignments")
-        .select(
-          `id, title, points_possible, due_at,
-           assignment_group:assignment_groups(name, position),
-           submissions(id, submitted_at, grades(points_earned))`,
-        )
+        .select(canManage ? manageSelect : memberSelect)
         .eq("course_id", course.id)
         .order("due_at", { ascending: true })
     : null;

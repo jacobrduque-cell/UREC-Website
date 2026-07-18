@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentCourse, getIsExec, getSignedFileUrl } from "@/lib/data/queries";
+import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
 import Link from "next/link";
 import { createFolder, uploadFile, togglePublished } from "./actions";
 
@@ -68,6 +68,22 @@ export async function FileBrowser({ folderId }: { folderId: string | null }) {
   const visibleFiles = ((files ?? []) as FileRow[]).filter(
     (f) => isExec || f.published,
   );
+
+  // Batch-sign every file in this folder in ONE Storage call. Signing per
+  // row (a fresh client + round trip apiece) meant a folder with 100+
+  // files fired 100+ sequential sign requests before it could render.
+  const signedUrlByPath = new Map<string, string>();
+  if (visibleFiles.length > 0) {
+    const { data: signed } = await supabase.storage
+      .from("course-files")
+      .createSignedUrls(
+        visibleFiles.map((f) => f.storage_path),
+        300,
+      );
+    for (const entry of signed ?? []) {
+      if (entry.path && entry.signedUrl) signedUrlByPath.set(entry.path, entry.signedUrl);
+    }
+  }
 
   const createFolderAction = createFolder.bind(null, folderId);
   const uploadFileAction = uploadFile.bind(null, folderId);
@@ -147,7 +163,13 @@ export async function FileBrowser({ folderId }: { folderId: string | null }) {
           </li>
         ))}
         {visibleFiles.map((f) => (
-          <FileRowItem key={f.id} file={f} folderId={folderId} isExec={isExec} />
+          <FileRowItem
+            key={f.id}
+            file={f}
+            folderId={folderId}
+            isExec={isExec}
+            url={signedUrlByPath.get(f.storage_path) ?? null}
+          />
         ))}
         {folders.length === 0 && visibleFiles.length === 0 && (
           <li className="py-6 text-sm text-muted">This folder is empty.</li>
@@ -157,16 +179,17 @@ export async function FileBrowser({ folderId }: { folderId: string | null }) {
   );
 }
 
-async function FileRowItem({
+function FileRowItem({
   file,
   folderId,
   isExec,
+  url,
 }: {
   file: FileRow;
   folderId: string | null;
   isExec: boolean;
+  url: string | null;
 }) {
-  const url = await getSignedFileUrl(file.storage_path, "course-files");
   const toggleAction = togglePublished.bind(null, file.id, folderId, file.published);
 
   return (

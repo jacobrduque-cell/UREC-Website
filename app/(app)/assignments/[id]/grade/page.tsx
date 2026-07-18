@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getIsExec, getIsGrader, getSignedFileUrl, oneOrFirst } from "@/lib/data/queries";
+import { getIsExec, getIsGrader, oneOrFirst } from "@/lib/data/queries";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { addSubmissionComment, gradeSubmission } from "../../actions";
@@ -75,6 +75,21 @@ export default async function GradeAssignmentPage({
     | undefined;
   const criteria = (rubric?.rubric_criteria ?? []).sort((a, b) => a.position - b.position);
 
+  // Sign every submission file in ONE batch. Signing per file (a fresh
+  // client + Storage round trip apiece) meant a 115-submission
+  // assignment fired 115+ sequential sign requests before the page could
+  // render.
+  const allPaths = rows.flatMap((s) => s.submission_files.map((sf) => sf.file.storage_path));
+  const signedUrlByPath = new Map<string, string>();
+  if (allPaths.length > 0) {
+    const { data: signed } = await supabase.storage
+      .from("submissions")
+      .createSignedUrls(allPaths, 300);
+    for (const entry of signed ?? []) {
+      if (entry.path && entry.signedUrl) signedUrlByPath.set(entry.path, entry.signedUrl);
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
       <Link
@@ -100,6 +115,7 @@ export default async function GradeAssignmentPage({
             assignmentId={id}
             pointsPossible={assignment.points_possible}
             criteria={criteria}
+            signedUrlByPath={signedUrlByPath}
           />
         ))}
         {rows.length === 0 && (
@@ -110,16 +126,18 @@ export default async function GradeAssignmentPage({
   );
 }
 
-async function SubmissionCard({
+function SubmissionCard({
   submission,
   assignmentId,
   pointsPossible,
   criteria,
+  signedUrlByPath,
 }: {
   submission: SubmissionRow;
   assignmentId: string;
   pointsPossible: number;
   criteria: CriterionRow[];
+  signedUrlByPath: Map<string, string>;
 }) {
   const grade = oneOrFirst(submission.grades);
   const resubmittedSinceGrading =
@@ -129,12 +147,10 @@ async function SubmissionCard({
     : null;
   const gradeAction = gradeSubmission.bind(null, submission.id, assignmentId, rubricCriteriaArg);
   const commentAction = addSubmissionComment.bind(null, submission.id, assignmentId);
-  const fileEntries = await Promise.all(
-    submission.submission_files.map(async (sf) => ({
-      ...sf.file,
-      url: await getSignedFileUrl(sf.file.storage_path),
-    })),
-  );
+  const fileEntries = submission.submission_files.map((sf) => ({
+    ...sf.file,
+    url: signedUrlByPath.get(sf.file.storage_path) ?? null,
+  }));
   const comments = [...submission.submission_comments].sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
   );
