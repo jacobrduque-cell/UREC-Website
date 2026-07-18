@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
 import Link from "next/link";
 import { assignSection, enrollMembers, removeEnrollment, removePending } from "./actions";
+import { ConfirmSubmitButton } from "../ui/form-controls";
 
 type EnrollmentRow = {
   id: string;
@@ -288,13 +289,13 @@ export default async function DirectoryPage({
                 )}
                 {isExec && (
                   <form action={removeAction}>
-                    <button
-                      type="submit"
+                    <ConfirmSubmitButton
+                      message={`Remove ${r.user!.full_name ?? r.user!.email} from this course? This deletes their enrollment.`}
                       className="whitespace-nowrap rounded-md border border-hair px-2 py-1 text-xs font-medium text-neg transition-colors hover:bg-[#fdecea]"
                       title="Remove from course"
                     >
                       Remove
-                    </button>
+                    </ConfirmSubmitButton>
                   </form>
                 )}
               </div>
@@ -328,13 +329,13 @@ export default async function DirectoryPage({
                       {p.role?.name ?? "Member"}
                     </span>
                     <form action={removeAction}>
-                      <button
-                        type="submit"
+                      <ConfirmSubmitButton
+                        message={`Cancel the invite for ${p.email}?`}
                         className="whitespace-nowrap rounded-md border border-hair px-2 py-1 text-xs font-medium text-neg transition-colors hover:bg-[#fdecea]"
                         title="Cancel invite"
                       >
                         Cancel
-                      </button>
+                      </ConfirmSubmitButton>
                     </form>
                   </div>
                 </li>

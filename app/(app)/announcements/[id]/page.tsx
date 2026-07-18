@@ -2,7 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getIsExec } from "@/lib/data/queries";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { createReply } from "../actions";
+import { createReply, deleteAnnouncement } from "../actions";
+import { ConfirmSubmitButton, SubmitButton } from "../../ui/form-controls";
 
 type Announcement = {
   id: string;
@@ -89,6 +90,25 @@ export default async function AnnouncementDetailPage({
         {fmt(a.published_at)}
       </p>
 
+      {isExec && (
+        <div className="mt-3 flex items-center gap-3">
+          <Link
+            href={`/announcements/${a.id}/edit`}
+            className="text-xs font-medium text-blue hover:underline"
+          >
+            Edit
+          </Link>
+          <form action={deleteAnnouncement.bind(null, a.id)}>
+            <ConfirmSubmitButton
+              message={`Delete "${a.title}"? This removes it and all its replies for everyone.`}
+              className="text-xs font-medium text-neg hover:underline"
+            >
+              Delete
+            </ConfirmSubmitButton>
+          </form>
+        </div>
+      )}
+
       <p className="mt-6 whitespace-pre-wrap text-sm leading-relaxed text-text">
         {a.body}
       </p>
@@ -123,12 +143,12 @@ export default async function AnnouncementDetailPage({
               placeholder="Write a reply…"
               className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
             />
-            <button
-              type="submit"
+            <SubmitButton
+              pendingText="Posting…"
               className="self-start rounded-md bg-blue px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-sky"
             >
               Reply
-            </button>
+            </SubmitButton>
           </form>
         )}
       </div>

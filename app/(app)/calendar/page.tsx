@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
-import { generateCalendarFeedToken } from "./actions";
+import { deleteEvent, generateCalendarFeedToken } from "./actions";
+import { ConfirmSubmitButton } from "../ui/form-controls";
 import { headers } from "next/headers";
 import Link from "next/link";
 
@@ -171,6 +172,24 @@ function EventRow({ event, isExec }: { event: EventRow; isExec: boolean }) {
           >
             Take attendance
           </Link>
+        )}
+        {isExec && (
+          <>
+            <Link
+              href={`/calendar/${event.id}/edit`}
+              className="text-xs font-medium text-blue hover:underline"
+            >
+              Edit
+            </Link>
+            <form action={deleteEvent.bind(null, event.id)}>
+              <ConfirmSubmitButton
+                message={`Delete "${event.title}"? This removes it from everyone's calendar.`}
+                className="text-xs font-medium text-neg hover:underline"
+              >
+                Delete
+              </ConfirmSubmitButton>
+            </form>
+          </>
         )}
       </div>
     </li>

@@ -75,6 +75,36 @@ export async function createAnnouncement(formData: FormData) {
   redirect(`/announcements/${data.id}`);
 }
 
+// Edit an existing announcement. Never re-notifies — an edit is a
+// correction, not a new post. RLS re-enforces exec-only on the write.
+export async function updateAnnouncement(announcementId: string, formData: FormData) {
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const pinned = formData.get("pinned") === "on";
+  const locked = formData.get("locked") === "on";
+  if (!title || !body) throw new Error("Title and body are required.");
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("announcements")
+    .update({ title, body, pinned, locked })
+    .eq("id", announcementId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/announcements");
+  revalidatePath(`/announcements/${announcementId}`);
+  redirect(`/announcements/${announcementId}`);
+}
+
+export async function deleteAnnouncement(announcementId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("announcements").delete().eq("id", announcementId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/announcements");
+  redirect("/announcements");
+}
+
 export async function createReply(announcementId: string, formData: FormData) {
   const body = String(formData.get("body") ?? "").trim();
   if (!body) return;

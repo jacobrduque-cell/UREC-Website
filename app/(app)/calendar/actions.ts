@@ -51,6 +51,54 @@ export async function createEvent(formData: FormData) {
   redirect("/calendar");
 }
 
+// RLS re-enforces exec-only on calendar_events writes regardless of the
+// UI gate — same pattern used throughout.
+export async function updateEvent(eventId: string, formData: FormData) {
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const startsAt = String(formData.get("starts_at") ?? "");
+  const endsAt = String(formData.get("ends_at") ?? "");
+  const allDay = formData.get("all_day") === "on";
+  const scope = String(formData.get("scope") ?? "course");
+
+  if (!title) throw new Error("Title is required.");
+
+  const startsIso = pacificWallClockToUtcISO(startsAt);
+  const endsIso = pacificWallClockToUtcISO(endsAt);
+  if (!startsIso) throw new Error("Enter a valid start time.");
+  if (endsIso && new Date(endsIso) < new Date(startsIso)) {
+    throw new Error("The end time can't be before the start time.");
+  }
+
+  const supabase = await createClient();
+  const course = await getCurrentCourse();
+
+  const { error } = await supabase
+    .from("calendar_events")
+    .update({
+      title,
+      description: description || null,
+      starts_at: startsIso,
+      ends_at: endsIso,
+      all_day: allDay,
+      course_id: scope === "platform" ? null : (course?.id ?? null),
+    })
+    .eq("id", eventId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/calendar");
+  redirect("/calendar");
+}
+
+export async function deleteEvent(eventId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("calendar_events").delete().eq("id", eventId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/calendar");
+  redirect("/calendar");
+}
+
 /**
  * Mints a fresh calendar subscribe link and invalidates any earlier one
  * for this user — only the hash is stored (api_tokens.token_hash), so

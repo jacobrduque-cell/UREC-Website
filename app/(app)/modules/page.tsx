@@ -8,6 +8,7 @@ import {
   deleteModuleItem,
   toggleModulePublished,
 } from "./actions";
+import { ConfirmSubmitButton } from "../ui/form-controls";
 
 type ModuleItem = {
   id: string;
@@ -114,9 +115,12 @@ export default async function ModulesPage() {
                       </button>
                     </form>
                     <form action={deleteModule.bind(null, m.id)}>
-                      <button className="rounded-md border border-hair px-2.5 py-1 text-xs font-medium text-neg transition-colors hover:bg-white">
+                      <ConfirmSubmitButton
+                        message={`Delete the "${m.name}" module and all its items? This can't be undone.`}
+                        className="rounded-md border border-hair px-2.5 py-1 text-xs font-medium text-neg transition-colors hover:bg-white"
+                      >
                         Delete
-                      </button>
+                      </ConfirmSubmitButton>
                     </form>
                   </span>
                 )}
@@ -206,9 +210,13 @@ export default async function ModulesPage() {
 function DeleteItemBtn({ itemId }: { itemId: string }) {
   return (
     <form action={deleteModuleItem.bind(null, itemId)}>
-      <button className="text-xs text-muted transition-colors hover:text-neg" aria-label="Remove item">
+      <ConfirmSubmitButton
+        message="Remove this item from the module?"
+        className="text-xs text-muted transition-colors hover:text-neg"
+        title="Remove item"
+      >
         Remove
-      </button>
+      </ConfirmSubmitButton>
     </form>
   );
 }
