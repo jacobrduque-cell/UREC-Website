@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentCourse, oneOrFirst } from "@/lib/data/queries";
+import { getCurrentCourse, getIsExec, getIsGrader, oneOrFirst } from "@/lib/data/queries";
+import Link from "next/link";
 
 type Grade = { points_earned: number };
 type AssignmentRow = {
@@ -16,6 +17,12 @@ export default async function GradesPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  const [isExec, isGrader] = await Promise.all([
+    getIsExec(),
+    course ? getIsGrader(course.id) : Promise.resolve(false),
+  ]);
+  const canManage = isExec || isGrader;
 
   // This is a personal "my grades" view, not a gradebook — the
   // submissions embed is explicitly scoped to the viewer's own row so
@@ -85,10 +92,22 @@ export default async function GradesPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
-      <h1 className="font-display text-2xl font-bold text-navy-deep">Grades</h1>
-      <p className="mt-2 text-sm text-muted">
-        {course?.name ?? "UREC Analyst Program"}
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-navy-deep">Grades</h1>
+          <p className="mt-2 text-sm text-muted">
+            {course?.name ?? "UREC Analyst Program"}
+          </p>
+        </div>
+        {canManage && (
+          <Link
+            href="/grades/gradebook"
+            className="whitespace-nowrap rounded-md bg-blue px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky"
+          >
+            Gradebook
+          </Link>
+        )}
+      </div>
 
       <div className="mt-8 overflow-hidden rounded-md border border-hair">
         <table className="w-full text-left text-sm">

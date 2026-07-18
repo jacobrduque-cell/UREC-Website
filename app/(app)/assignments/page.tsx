@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getIsExec, getIsGrader, oneOrFirst } from "@/lib/data/queries";
+import { submissionStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/submission-status";
 import Link from "next/link";
 
 type Grade = { points_earned: number };
@@ -9,7 +10,7 @@ type AssignmentRow = {
   points_possible: number;
   due_at: string | null;
   assignment_group: { name: string; position: number } | null;
-  submissions: { id: string; grades: Grade | Grade[] | null }[];
+  submissions: { id: string; submitted_at: string | null; grades: Grade | Grade[] | null }[];
 };
 
 function fmtDue(iso: string | null) {
@@ -38,7 +39,7 @@ export default async function AssignmentsPage() {
         .select(
           `id, title, points_possible, due_at,
            assignment_group:assignment_groups(name, position),
-           submissions(id, grades(points_earned))`,
+           submissions(id, submitted_at, grades(points_earned))`,
         )
         .eq("course_id", course.id)
         .order("due_at", { ascending: true })
@@ -96,27 +97,25 @@ export default async function AssignmentsPage() {
             </div>
             <ul className="divide-y divide-hair">
               {items.map((a) => {
-                const grade = oneOrFirst(a.submissions[0]?.grades)?.points_earned;
+                const sub = a.submissions[0];
+                const grade = oneOrFirst(sub?.grades)?.points_earned;
                 const submitted = a.submissions.length > 0;
+                const status = submissionStatus({
+                  dueAt: a.due_at,
+                  submittedAt: sub?.submitted_at,
+                  graded: grade != null,
+                });
 
-                let status: string;
-                let statusClass: string;
-                if (canManage) {
-                  status = `${a.submissions.length} submitted`;
-                  statusClass = "text-muted";
-                } else if (grade != null) {
-                  status = `${grade}/${a.points_possible} pts`;
-                  statusClass = "text-navy-deep font-medium";
-                } else if (submitted) {
-                  status = "Submitted";
-                  statusClass = "text-pos font-medium";
-                } else {
-                  status = `—/${a.points_possible} pts`;
-                  statusClass = "text-muted";
-                }
-                // Green bar = has a grade/submission; grey otherwise —
-                // matches bCourses' left status rail.
-                const barColor = grade != null || submitted ? "bg-pos" : "bg-hair";
+                // Manage view shows the roster count; student view shows a
+                // status pill (Late / Missing / Submitted / Graded).
+                const barColor =
+                  status === "missing"
+                    ? "bg-neg"
+                    : status === "late"
+                      ? "bg-[#B4531A]"
+                      : grade != null || submitted
+                        ? "bg-pos"
+                        : "bg-hair";
 
                 return (
                   <li key={a.id}>
@@ -137,7 +136,24 @@ export default async function AssignmentsPage() {
                             </span>
                           </span>
                         </span>
-                        <span className={`whitespace-nowrap text-sm ${statusClass}`}>{status}</span>
+                        {canManage ? (
+                          <span className="whitespace-nowrap text-sm text-muted">
+                            {a.submissions.length} submitted
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-2 whitespace-nowrap">
+                            {grade != null && (
+                              <span className="text-sm font-medium text-navy-deep">
+                                {grade}/{a.points_possible}
+                              </span>
+                            )}
+                            <span
+                              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_PILL[status]}`}
+                            >
+                              {STATUS_LABEL[status]}
+                            </span>
+                          </span>
+                        )}
                       </span>
                     </Link>
                   </li>
