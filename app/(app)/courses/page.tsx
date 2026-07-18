@@ -18,6 +18,11 @@ export default async function CoursesPage() {
 
   const terms = (data ?? []) as unknown as TermRow[];
 
+  // Flat list of existing courses to offer as a clone source.
+  const existingCourses = terms.flatMap((t) =>
+    t.courses.map((c) => ({ id: c.id, label: `${c.name}${c.code ? ` (${c.code})` : ""} — ${t.name}` })),
+  );
+
   return (
     <div className="mx-auto w-full max-w-2xl px-8 py-12">
       <h1 className="font-display text-2xl font-bold text-navy-deep">
@@ -173,6 +178,36 @@ export default async function CoursesPage() {
               />
             </div>
           </div>
+
+          {existingCourses.length > 0 && (
+            <div>
+              <label
+                htmlFor="copy_from"
+                className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted"
+              >
+                Copy content from (optional)
+              </label>
+              <select
+                id="copy_from"
+                name="copy_from"
+                defaultValue=""
+                className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
+              >
+                <option value="">Start empty</option>
+                {existingCourses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-muted">
+                Clones assignments, rubrics, modules, pages, quizzes, and
+                calendar events (due dates shifted to the new term). People,
+                submissions, and grades are not copied. Everything comes in
+                as a draft.
+              </p>
+            </div>
+          )}
 
           <label className="flex items-center gap-2 text-sm text-text">
             <input type="checkbox" name="make_current" className="h-4 w-4" />

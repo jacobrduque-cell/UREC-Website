@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { cloneCourseContent } from "./clone";
 
 // RLS re-enforces exec-only on terms/courses writes regardless of the
 // UI gate on this page — same pattern used throughout.
@@ -13,6 +14,7 @@ export async function createTermAndCourse(formData: FormData) {
   const courseName = String(formData.get("course_name") ?? "").trim();
   const courseCode = String(formData.get("course_code") ?? "").trim();
   const makeCurrent = formData.get("make_current") === "on";
+  const copyFrom = String(formData.get("copy_from") ?? "").trim();
 
   if (!termName || !startsOn || !endsOn || !courseName) {
     throw new Error("Term name, dates, and course name are required.");
@@ -31,13 +33,23 @@ export async function createTermAndCourse(formData: FormData) {
     .single();
   if (tErr) throw new Error(tErr.message);
 
-  const { error: cErr } = await supabase.from("courses").insert({
-    term_id: term.id,
-    name: courseName,
-    code: courseCode || null,
-    published: false,
-  });
+  const { data: course, error: cErr } = await supabase
+    .from("courses")
+    .insert({
+      term_id: term.id,
+      name: courseName,
+      code: courseCode || null,
+      published: false,
+    })
+    .select("id")
+    .single();
   if (cErr) throw new Error(cErr.message);
+
+  // Succession: optionally clone last term's content into the fresh
+  // course so a new cohort's exec doesn't rebuild it by hand.
+  if (copyFrom) {
+    await cloneCourseContent(supabase, copyFrom, course.id, startsOn);
+  }
 
   revalidatePath("/courses");
   redirect("/courses");
