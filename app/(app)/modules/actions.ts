@@ -6,31 +6,39 @@ import { revalidatePath } from "next/cache";
 
 // RLS re-enforces exec-only on modules/module_items writes regardless
 // of the UI gate on these pages — same pattern used throughout.
-export async function createModule(formData: FormData) {
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) throw new Error("Module name is required.");
+export async function createModule(
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  try {
+    const name = String(formData.get("name") ?? "").trim();
+    if (!name) return { error: "Give the module/week a name." };
 
-  const course = await getCurrentCourse();
-  if (!course) throw new Error("No active course found.");
+    const course = await getCurrentCourse();
+    if (!course) return { error: "No active course found — pick a term before adding modules." };
 
-  const supabase = await createClient();
-  const { data: last } = await supabase
-    .from("modules")
-    .select("position")
-    .eq("course_id", course.id)
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    const supabase = await createClient();
+    const { data: last } = await supabase
+      .from("modules")
+      .select("position")
+      .eq("course_id", course.id)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  const { error } = await supabase.from("modules").insert({
-    course_id: course.id,
-    name,
-    position: (last?.position ?? -1) + 1,
-    published: false,
-  });
-  if (error) throw new Error(error.message);
+    const { error } = await supabase.from("modules").insert({
+      course_id: course.id,
+      name,
+      position: (last?.position ?? -1) + 1,
+      published: false,
+    });
+    if (error) return { error: error.message };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't create the module. Try again." };
+  }
 
   revalidatePath("/modules");
+  return {};
 }
 
 export async function toggleModulePublished(moduleId: string, currentlyPublished: boolean) {
@@ -50,57 +58,67 @@ export async function deleteModule(moduleId: string) {
   revalidatePath("/modules");
 }
 
-export async function addModuleItem(moduleId: string, formData: FormData) {
-  const itemType = String(formData.get("item_type") ?? "");
-  if (!["assignment", "page", "quiz", "url", "header"].includes(itemType)) {
-    throw new Error("Invalid item type.");
+export async function addModuleItem(
+  moduleId: string,
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  try {
+    const itemType = String(formData.get("item_type") ?? "");
+    if (!["assignment", "page", "quiz", "url", "header"].includes(itemType)) {
+      return { error: "Pick what this item links to." };
+    }
+
+    const supabase = await createClient();
+    const { data: last } = await supabase
+      .from("module_items")
+      .select("position")
+      .eq("module_id", moduleId)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const position = (last?.position ?? -1) + 1;
+
+    // Header and URL rows carry their own title; the others derive their
+    // title from the referenced object so the module always shows the
+    // real current name.
+    const row: Record<string, unknown> = {
+      module_id: moduleId,
+      position,
+      item_type: itemType,
+    };
+
+    if (itemType === "header") {
+      const title = String(formData.get("title") ?? "").trim();
+      if (!title) return { error: "Give the header some text." };
+      row.title = title;
+    } else if (itemType === "url") {
+      const title = String(formData.get("title") ?? "").trim();
+      const url = String(formData.get("url") ?? "").trim();
+      if (!title) return { error: "Give the link some text." };
+      if (!url) return { error: "Add the URL this link should point to." };
+      row.title = title;
+      row.url = url;
+    } else {
+      const refId = String(formData.get("ref_id") ?? "");
+      if (!refId) return { error: "Pick which item to add." };
+      const table =
+        itemType === "assignment" ? "assignments" : itemType === "page" ? "wiki_pages" : "quizzes";
+      const titleCol = itemType === "quiz" ? "title" : itemType === "page" ? "title" : "title";
+      const { data: ref } = await supabase.from(table).select(`id, ${titleCol}`).eq("id", refId).maybeSingle();
+      if (!ref) return { error: "That item no longer exists — refresh and try again." };
+      row.title = (ref as Record<string, string>)[titleCol];
+      row[`${itemType}_id`] = refId;
+    }
+
+    const { error } = await supabase.from("module_items").insert(row);
+    if (error) return { error: error.message };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't add the item. Try again." };
   }
-
-  const supabase = await createClient();
-  const { data: last } = await supabase
-    .from("module_items")
-    .select("position")
-    .eq("module_id", moduleId)
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const position = (last?.position ?? -1) + 1;
-
-  // Header and URL rows carry their own title; the others derive their
-  // title from the referenced object so the module always shows the
-  // real current name.
-  const row: Record<string, unknown> = {
-    module_id: moduleId,
-    position,
-    item_type: itemType,
-  };
-
-  if (itemType === "header") {
-    const title = String(formData.get("title") ?? "").trim();
-    if (!title) throw new Error("Header text is required.");
-    row.title = title;
-  } else if (itemType === "url") {
-    const title = String(formData.get("title") ?? "").trim();
-    const url = String(formData.get("url") ?? "").trim();
-    if (!title || !url) throw new Error("Link text and URL are required.");
-    row.title = title;
-    row.url = url;
-  } else {
-    const refId = String(formData.get("ref_id") ?? "");
-    if (!refId) throw new Error("Choose an item to add.");
-    const table =
-      itemType === "assignment" ? "assignments" : itemType === "page" ? "wiki_pages" : "quizzes";
-    const titleCol = itemType === "quiz" ? "title" : itemType === "page" ? "title" : "title";
-    const { data: ref } = await supabase.from(table).select(`id, ${titleCol}`).eq("id", refId).maybeSingle();
-    if (!ref) throw new Error("That item no longer exists.");
-    row.title = (ref as Record<string, string>)[titleCol];
-    row[`${itemType}_id`] = refId;
-  }
-
-  const { error } = await supabase.from("module_items").insert(row);
-  if (error) throw new Error(error.message);
 
   revalidatePath("/modules");
+  return {};
 }
 
 export async function deleteModuleItem(itemId: string) {

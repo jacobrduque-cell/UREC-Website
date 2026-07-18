@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { addQuestion, submitQuiz, toggleQuizPublished, updateQuizSettings } from "../actions";
 import { AddQuestionForm } from "../add-question-form";
+import { QuizSettingsForm } from "./quiz-settings-form";
 
 type QuestionType =
   | "multiple_choice"
@@ -211,22 +212,11 @@ export default async function QuizDetailPage({
             <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-navy-deep">
               Quiz settings
             </summary>
-            <form
+            <QuizSettingsForm
               action={updateQuizSettings.bind(null, id)}
-              className="flex flex-col gap-3 border-t border-hair px-4 py-4"
-            >
-              <label className="flex items-center gap-2 text-sm text-text">
-                <input type="checkbox" name="shuffle_questions" defaultChecked={quiz.shuffle_questions} className="h-4 w-4" />
-                Shuffle question order for each member
-              </label>
-              <label className="flex items-center gap-2 text-sm text-text">
-                <input type="checkbox" name="show_correct_after" defaultChecked={quiz.show_correct_after} className="h-4 w-4" />
-                Show correct answers &amp; explanations after a member submits
-              </label>
-              <button className="self-start rounded-md bg-blue px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-sky">
-                Save settings
-              </button>
-            </form>
+              shuffleQuestions={quiz.shuffle_questions}
+              showCorrectAfter={quiz.show_correct_after}
+            />
           </details>
           <ul className="flex flex-col gap-4">
             {questions.map((q, i) => {

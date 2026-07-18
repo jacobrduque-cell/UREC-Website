@@ -7,24 +7,33 @@ import { revalidatePath } from "next/cache";
 
 export async function createFolder(
   parentFolderId: string | null,
+  _prev: { error?: string },
   formData: FormData,
-) {
+): Promise<{ error?: string }> {
   const name = String(formData.get("name") ?? "").trim();
-  if (!name) throw new Error("Folder name is required.");
+  if (!name) return { error: "Name the folder." };
 
-  const supabase = await createClient();
-  const course = await getCurrentCourse();
-  if (!course) throw new Error("No active course found.");
+  try {
+    const supabase = await createClient();
+    const course = await getCurrentCourse();
+    if (!course)
+      return { error: "No active course found. Refresh and try again." };
 
-  const { error } = await supabase.from("folders").insert({
-    course_id: course.id,
-    parent_folder_id: parentFolderId,
-    name,
-  });
-  if (error) throw new Error(error.message);
+    const { error } = await supabase.from("folders").insert({
+      course_id: course.id,
+      parent_folder_id: parentFolderId,
+      name,
+    });
+    if (error) return { error: `Couldn't create the folder: ${error.message}` };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Couldn't create the folder. Try again.",
+    };
+  }
 
   revalidatePath("/files");
   if (parentFolderId) revalidatePath(`/files/${parentFolderId}`);
+  return {};
 }
 
 export async function uploadFile(folderId: string | null, formData: FormData) {

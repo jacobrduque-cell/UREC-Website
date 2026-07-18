@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useActionState, useState } from "react";
 import { utcISOToPacificWallClock } from "@/lib/timezone";
-import { SubmitButton } from "../ui/form-controls";
+import { SubmitButton, FormError, FieldError } from "../ui/form-controls";
+
+type FormState = { error?: string };
 
 type ExistingEvent = {
   title: string;
@@ -19,12 +24,27 @@ export function EventForm({
   existing,
   submitLabel,
 }: {
-  action: (formData: FormData) => void | Promise<void>;
+  action: (prevState: FormState, formData: FormData) => Promise<FormState>;
   existing?: ExistingEvent;
   submitLabel: string;
 }) {
+  const [state, formAction] = useActionState(action, {});
+  const [startsAt, setStartsAt] = useState(
+    utcISOToPacificWallClock(existing?.starts_at ?? null),
+  );
+  const [endsAt, setEndsAt] = useState(
+    utcISOToPacificWallClock(existing?.ends_at ?? null),
+  );
+
+  // Immediate, under-the-field feedback the moment both ends are set and
+  // the range is backwards — before the exec ever clicks the button.
+  const endBeforeStart =
+    startsAt && endsAt && new Date(endsAt) < new Date(startsAt);
+
   return (
-    <form action={action} className="mt-8 flex flex-col gap-5">
+    <form action={formAction} className="mt-8 flex flex-col gap-5">
+      <FormError error={state?.error} />
+
       <div>
         <label htmlFor="title" className={label}>Title</label>
         <input id="title" name="title" required defaultValue={existing?.title ?? ""} className={field} />
@@ -43,7 +63,8 @@ export function EventForm({
             name="starts_at"
             type="datetime-local"
             required
-            defaultValue={utcISOToPacificWallClock(existing?.starts_at ?? null)}
+            value={startsAt}
+            onChange={(e) => setStartsAt(e.target.value)}
             className={field}
           />
         </div>
@@ -53,9 +74,14 @@ export function EventForm({
             id="ends_at"
             name="ends_at"
             type="datetime-local"
-            defaultValue={utcISOToPacificWallClock(existing?.ends_at ?? null)}
+            value={endsAt}
+            onChange={(e) => setEndsAt(e.target.value)}
+            aria-invalid={endBeforeStart ? true : undefined}
             className={field}
           />
+          {endBeforeStart && (
+            <FieldError>The end time can&rsquo;t be before the start time.</FieldError>
+          )}
         </div>
       </div>
 
@@ -80,6 +106,7 @@ export function EventForm({
       <div className="flex gap-3">
         <SubmitButton
           pendingText="Saving…"
+          disabled={Boolean(endBeforeStart)}
           className="rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
         >
           {submitLabel}

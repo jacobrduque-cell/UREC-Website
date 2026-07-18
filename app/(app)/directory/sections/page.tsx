@@ -3,6 +3,7 @@ import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createSection } from "../actions";
+import { SectionForm } from "./section-form";
 
 type Section = { id: string; name: string; enrollments: { id: string }[] };
 
@@ -57,20 +58,7 @@ export default async function SectionsPage() {
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
           New Section
         </h2>
-        <form action={createSection} className="mt-4 flex gap-3">
-          <input
-            name="name"
-            required
-            placeholder="e.g. Tuesday Cohort"
-            className="flex-1 rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-          />
-          <button
-            type="submit"
-            className="whitespace-nowrap rounded-md bg-blue px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
-          >
-            Create Section
-          </button>
-        </form>
+        <SectionForm action={createSection} />
       </div>
     </div>
   );

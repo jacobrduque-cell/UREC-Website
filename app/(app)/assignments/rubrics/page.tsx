@@ -3,6 +3,7 @@ import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createRubric } from "../actions";
+import { RubricForm } from "./rubric-form";
 
 type Criterion = { id: string; criterion: string; description: string; points: number; position: number };
 type Rubric = { id: string; title: string; rubric_criteria: Criterion[] };
@@ -22,7 +23,6 @@ export default async function RubricsPage() {
     : { data: null };
 
   const rubrics = (data ?? []) as unknown as Rubric[];
-  const criterionRows = Array.from({ length: 6 });
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
@@ -59,57 +59,7 @@ export default async function RubricsPage() {
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
           New Rubric
         </h2>
-        <form action={createRubric} className="mt-4 flex flex-col gap-5">
-          <div>
-            <label
-              htmlFor="title"
-              className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted"
-            >
-              Rubric Title
-            </label>
-            <input
-              id="title"
-              name="title"
-              required
-              className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-            />
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-              Criteria (leave rows blank to skip)
-            </p>
-            {criterionRows.map((_, i) => (
-              <div key={i} className="grid grid-cols-[1fr_2fr_5rem] gap-2">
-                <input
-                  name={`criterion_${i}`}
-                  placeholder="Criterion"
-                  className="rounded-md border border-hair bg-white px-2.5 py-2 text-sm text-text outline-none focus:border-blue"
-                />
-                <input
-                  name={`description_${i}`}
-                  placeholder="Description"
-                  className="rounded-md border border-hair bg-white px-2.5 py-2 text-sm text-text outline-none focus:border-blue"
-                />
-                <input
-                  name={`points_${i}`}
-                  type="number"
-                  min={0}
-                  step="0.5"
-                  placeholder="Pts"
-                  className="rounded-md border border-hair bg-white px-2.5 py-2 text-sm text-text outline-none focus:border-blue"
-                />
-              </div>
-            ))}
-          </div>
-
-          <button
-            type="submit"
-            className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
-          >
-            Create Rubric
-          </button>
-        </form>
+        <RubricForm action={createRubric} />
       </div>
     </div>
   );

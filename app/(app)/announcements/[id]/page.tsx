@@ -3,7 +3,8 @@ import { getIsExec } from "@/lib/data/queries";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createReply, deleteAnnouncement } from "../actions";
-import { ConfirmSubmitButton, SubmitButton } from "../../ui/form-controls";
+import { ConfirmSubmitButton } from "../../ui/form-controls";
+import { ReplyForm } from "../reply-form";
 
 type Announcement = {
   id: string;
@@ -135,21 +136,7 @@ export default async function AnnouncementDetailPage({
             Replies are locked on this announcement.
           </p>
         ) : (
-          <form action={replyAction} className="mt-6 flex flex-col gap-3">
-            <textarea
-              name="body"
-              required
-              rows={3}
-              placeholder="Write a reply…"
-              className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-            />
-            <SubmitButton
-              pendingText="Posting…"
-              className="self-start rounded-md bg-blue px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-sky"
-            >
-              Reply
-            </SubmitButton>
-          </form>
+          <ReplyForm action={replyAction} />
         )}
       </div>
     </div>

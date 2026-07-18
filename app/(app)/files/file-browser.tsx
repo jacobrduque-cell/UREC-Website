@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
 import Link from "next/link";
 import { createFolder, uploadFile, togglePublished } from "./actions";
+import { NewFolderForm } from "./new-folder-form";
 
 type Folder = { id: string; name: string };
 type FileRow = {
@@ -116,20 +117,7 @@ export async function FileBrowser({ folderId }: { folderId: string | null }) {
 
       {isExec && (
         <div className="mt-6 flex flex-wrap gap-3">
-          <form action={createFolderAction} className="flex gap-2">
-            <input
-              name="name"
-              placeholder="New folder name"
-              required
-              className="rounded-md border border-hair bg-white px-3 py-2 text-sm text-text outline-none focus:border-blue"
-            />
-            <button
-              type="submit"
-              className="rounded-md border border-navy px-4 py-2 text-xs font-medium text-navy transition-colors hover:bg-navy hover:text-white"
-            >
-              New Folder
-            </button>
-          </form>
+          <NewFolderForm action={createFolderAction} />
           <form
             action={uploadFileAction}
             encType="multipart/form-data"

@@ -162,41 +162,57 @@ export async function updateAssignment(
   redirect(`/assignments/${assignmentId}`);
 }
 
-export async function createRubric(formData: FormData) {
-  const supabase = await createClient();
-  const course = await getCurrentCourse();
-  if (!course) throw new Error("No active course found.");
+export async function createRubric(
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient();
+    const course = await getCurrentCourse();
+    if (!course) {
+      return { error: "No active course — open a course from the dashboard first, then create the rubric inside it." };
+    }
 
-  const title = String(formData.get("title") ?? "").trim();
-  if (!title) throw new Error("Rubric title is required.");
+    const title = String(formData.get("title") ?? "").trim();
+    if (!title) return { error: "Give the rubric a title." };
 
-  const { data: rubric, error } = await supabase
-    .from("rubrics")
-    .insert({ course_id: course.id, title })
-    .select("id")
-    .single();
-  if (error) throw new Error(error.message);
+    const { data: rubric, error } = await supabase
+      .from("rubrics")
+      .insert({ course_id: course.id, title })
+      .select("id")
+      .single();
+    if (error) return { error: error.message };
 
-  const criteria = [];
-  for (let i = 0; i < 10; i++) {
-    const criterion = String(formData.get(`criterion_${i}`) ?? "").trim();
-    const description = String(formData.get(`description_${i}`) ?? "").trim();
-    const points = Number(formData.get(`points_${i}`));
-    if (!criterion || Number.isNaN(points)) continue;
-    criteria.push({
-      rubric_id: rubric.id,
-      criterion,
-      description,
-      points,
-      position: i,
-    });
+    const criteria = [];
+    for (let i = 0; i < 10; i++) {
+      const criterion = String(formData.get(`criterion_${i}`) ?? "").trim();
+      const description = String(formData.get(`description_${i}`) ?? "").trim();
+      const pointsRaw = String(formData.get(`points_${i}`) ?? "").trim();
+      const points = Number(pointsRaw);
+      // Skip fully-blank rows; but a criterion typed with no (or a bad)
+      // point value is a mistake worth flagging, not silently dropping.
+      if (!criterion && !pointsRaw) continue;
+      if (!criterion) return { error: "Every criterion needs a name — fill it in or clear its point value." };
+      if (!pointsRaw || Number.isNaN(points) || points < 0) {
+        return { error: `Give "${criterion}" a valid point value (0 or more).` };
+      }
+      criteria.push({
+        rubric_id: rubric.id,
+        criterion,
+        description,
+        points,
+        position: i,
+      });
+    }
+    if (criteria.length === 0) {
+      return { error: "Add at least one criterion with a point value." };
+    }
+
+    const { error: cErr } = await supabase.from("rubric_criteria").insert(criteria);
+    if (cErr) return { error: cErr.message };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't create the rubric. Try again." };
   }
-  if (criteria.length === 0) {
-    throw new Error("Add at least one criterion with a point value.");
-  }
-
-  const { error: cErr } = await supabase.from("rubric_criteria").insert(criteria);
-  if (cErr) throw new Error(cErr.message);
 
   revalidatePath("/assignments/rubrics");
   redirect("/assignments/rubrics");

@@ -7,7 +7,15 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createHash, randomBytes } from "node:crypto";
 
-export async function createEvent(formData: FormData) {
+// Returns `{ error }` on any failure instead of throwing, so the reason
+// reaches the form inline (via useActionState) rather than being redacted
+// into the generic error page. The redirect on success stays OUTSIDE the
+// try/catch — redirect() works by throwing, so catching it would swallow
+// the navigation.
+export async function createEvent(
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const startsAt = String(formData.get("starts_at") ?? "");
@@ -15,37 +23,42 @@ export async function createEvent(formData: FormData) {
   const allDay = formData.get("all_day") === "on";
   const scope = String(formData.get("scope") ?? "course");
 
-  if (!title || !startsAt) {
-    throw new Error("Title and start time are required.");
+  try {
+    if (!title) return { error: "Give the event a title." };
+    if (!startsAt) return { error: "Pick a start date and time." };
+
+    // datetime-local values are Pacific wall-clock (see lib/timezone).
+    const startsIso = pacificWallClockToUtcISO(startsAt);
+    const endsIso = pacificWallClockToUtcISO(endsAt);
+    if (!startsIso) return { error: "Enter a valid start time." };
+    if (endsIso && new Date(endsIso) < new Date(startsIso)) {
+      return { error: "The end time can't be before the start time." };
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return { error: "Your session expired — refresh the page and sign in again." };
+    }
+
+    const course = await getCurrentCourse();
+
+    const { error } = await supabase.from("calendar_events").insert({
+      course_id: scope === "platform" ? null : (course?.id ?? null),
+      title,
+      description: description || null,
+      starts_at: startsIso,
+      ends_at: endsIso,
+      all_day: allDay,
+      created_by: user.id,
+    });
+
+    if (error) return { error: error.message };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't save the event." };
   }
-
-  // datetime-local values are Pacific wall-clock (see lib/timezone).
-  const startsIso = pacificWallClockToUtcISO(startsAt);
-  const endsIso = pacificWallClockToUtcISO(endsAt);
-  if (!startsIso) throw new Error("Enter a valid start time.");
-  if (endsIso && new Date(endsIso) < new Date(startsIso)) {
-    throw new Error("The end time can't be before the start time.");
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const course = await getCurrentCourse();
-
-  const { error } = await supabase.from("calendar_events").insert({
-    course_id: scope === "platform" ? null : (course?.id ?? null),
-    title,
-    description: description || null,
-    starts_at: startsIso,
-    ends_at: endsIso,
-    all_day: allDay,
-    created_by: user.id,
-  });
-
-  if (error) throw new Error(error.message);
 
   revalidatePath("/calendar");
   redirect("/calendar");
@@ -53,7 +66,11 @@ export async function createEvent(formData: FormData) {
 
 // RLS re-enforces exec-only on calendar_events writes regardless of the
 // UI gate — same pattern used throughout.
-export async function updateEvent(eventId: string, formData: FormData) {
+export async function updateEvent(
+  eventId: string,
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const startsAt = String(formData.get("starts_at") ?? "");
@@ -61,30 +78,34 @@ export async function updateEvent(eventId: string, formData: FormData) {
   const allDay = formData.get("all_day") === "on";
   const scope = String(formData.get("scope") ?? "course");
 
-  if (!title) throw new Error("Title is required.");
+  try {
+    if (!title) return { error: "Give the event a title." };
 
-  const startsIso = pacificWallClockToUtcISO(startsAt);
-  const endsIso = pacificWallClockToUtcISO(endsAt);
-  if (!startsIso) throw new Error("Enter a valid start time.");
-  if (endsIso && new Date(endsIso) < new Date(startsIso)) {
-    throw new Error("The end time can't be before the start time.");
+    const startsIso = pacificWallClockToUtcISO(startsAt);
+    const endsIso = pacificWallClockToUtcISO(endsAt);
+    if (!startsIso) return { error: "Enter a valid start time." };
+    if (endsIso && new Date(endsIso) < new Date(startsIso)) {
+      return { error: "The end time can't be before the start time." };
+    }
+
+    const supabase = await createClient();
+    const course = await getCurrentCourse();
+
+    const { error } = await supabase
+      .from("calendar_events")
+      .update({
+        title,
+        description: description || null,
+        starts_at: startsIso,
+        ends_at: endsIso,
+        all_day: allDay,
+        course_id: scope === "platform" ? null : (course?.id ?? null),
+      })
+      .eq("id", eventId);
+    if (error) return { error: error.message };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't save the event." };
   }
-
-  const supabase = await createClient();
-  const course = await getCurrentCourse();
-
-  const { error } = await supabase
-    .from("calendar_events")
-    .update({
-      title,
-      description: description || null,
-      starts_at: startsIso,
-      ends_at: endsIso,
-      all_day: allDay,
-      course_id: scope === "platform" ? null : (course?.id ?? null),
-    })
-    .eq("id", eventId);
-  if (error) throw new Error(error.message);
 
   revalidatePath("/calendar");
   redirect("/calendar");

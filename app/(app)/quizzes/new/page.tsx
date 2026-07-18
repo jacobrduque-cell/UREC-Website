@@ -2,6 +2,7 @@ import { getIsExec } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createQuiz } from "../actions";
+import { QuizForm } from "./quiz-form";
 
 export default async function NewQuizPage() {
   const isExec = await getIsExec();
@@ -16,36 +17,7 @@ export default async function NewQuizPage() {
         New Quiz
       </h1>
 
-      <form action={createQuiz} className="mt-8 flex flex-col gap-5">
-        <div>
-          <label htmlFor="title" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">
-            Title
-          </label>
-          <input
-            id="title"
-            name="title"
-            required
-            className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-          />
-        </div>
-        <div>
-          <label htmlFor="description" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">
-            Description (optional)
-          </label>
-          <textarea
-            id="description"
-            name="description"
-            rows={3}
-            className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-          />
-        </div>
-        <button
-          type="submit"
-          className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
-        >
-          Create Quiz &amp; Add Questions
-        </button>
-      </form>
+      <QuizForm action={createQuiz} />
     </div>
   );
 }

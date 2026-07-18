@@ -3,6 +3,7 @@ import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { assignGroup, createGroup } from "../actions";
+import { GroupForm } from "./group-form";
 
 type Group = {
   id: string;
@@ -106,20 +107,7 @@ export default async function GroupsPage() {
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
           New Group
         </h2>
-        <form action={createGroup} className="mt-4 flex gap-3">
-          <input
-            name="name"
-            required
-            placeholder="e.g. Team Alpha"
-            className="flex-1 rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-          />
-          <button
-            type="submit"
-            className="whitespace-nowrap rounded-md bg-blue px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
-          >
-            Create Group
-          </button>
-        </form>
+        <GroupForm action={createGroup} />
       </div>
     </div>
   );

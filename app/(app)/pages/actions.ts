@@ -16,61 +16,91 @@ function slugify(title: string) {
 
 // RLS re-enforces exec-only on wiki_pages writes regardless of the UI
 // gate on these pages — same pattern as announcements and grades.
-export async function createWikiPage(formData: FormData) {
-  const title = String(formData.get("title") ?? "").trim();
-  const bodyMarkdown = String(formData.get("body_markdown") ?? "");
-  const published = formData.get("published") === "on";
-  if (!title) throw new Error("Title is required.");
+export async function createWikiPage(
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  let slug = "";
+  try {
+    const title = String(formData.get("title") ?? "").trim();
+    const bodyMarkdown = String(formData.get("body_markdown") ?? "");
+    const published = formData.get("published") === "on";
+    if (!title) return { error: "Give the page a title." };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return { error: "Your session expired — refresh the page and sign in again." };
+    }
 
-  const course = await getCurrentCourse();
-  if (!course) throw new Error("No active course found.");
+    const course = await getCurrentCourse();
+    if (!course) {
+      return { error: "No active course — open a course from the dashboard first, then create the page inside it." };
+    }
 
-  const slug = slugify(title) || crypto.randomUUID().slice(0, 8);
+    slug = slugify(title) || crypto.randomUUID().slice(0, 8);
 
-  const { error } = await supabase.from("wiki_pages").insert({
-    course_id: course.id,
-    title,
-    slug,
-    body_markdown: bodyMarkdown,
-    published,
-    created_by: user.id,
-  });
-  if (error) throw new Error(error.message);
+    const { error } = await supabase.from("wiki_pages").insert({
+      course_id: course.id,
+      title,
+      slug,
+      body_markdown: bodyMarkdown,
+      published,
+      created_by: user.id,
+    });
+    if (error) {
+      // A unique-violation (Postgres 23505) means the slug already exists
+      // in this course — surface it as a friendly, actionable message
+      // instead of the raw DB text.
+      if (error.code === "23505") {
+        return { error: "A page with that title already exists — pick a different one." };
+      }
+      return { error: error.message };
+    }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't create the page. Try again." };
+  }
 
   revalidatePath("/pages");
   redirect(`/pages/${slug}`);
 }
 
-export async function updateWikiPage(slug: string, formData: FormData) {
-  const title = String(formData.get("title") ?? "").trim();
-  const bodyMarkdown = String(formData.get("body_markdown") ?? "");
-  const published = formData.get("published") === "on";
-  if (!title) throw new Error("Title is required.");
+export async function updateWikiPage(
+  slug: string,
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  try {
+    const title = String(formData.get("title") ?? "").trim();
+    const bodyMarkdown = String(formData.get("body_markdown") ?? "");
+    const published = formData.get("published") === "on";
+    if (!title) return { error: "Give the page a title." };
 
-  const supabase = await createClient();
-  const course = await getCurrentCourse();
-  if (!course) throw new Error("No active course found.");
+    const supabase = await createClient();
+    const course = await getCurrentCourse();
+    if (!course) {
+      return { error: "No active course — open a course from the dashboard first, then edit the page inside it." };
+    }
 
-  // Slugs are unique only PER course, so scope the update to the active
-  // course — otherwise editing e.g. "resources" would overwrite the
-  // identically-slugged page in every course cloned from this one.
-  const { error } = await supabase
-    .from("wiki_pages")
-    .update({
-      title,
-      body_markdown: bodyMarkdown,
-      published,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("course_id", course.id)
-    .eq("slug", slug);
-  if (error) throw new Error(error.message);
+    // Slugs are unique only PER course, so scope the update to the active
+    // course — otherwise editing e.g. "resources" would overwrite the
+    // identically-slugged page in every course cloned from this one.
+    const { error } = await supabase
+      .from("wiki_pages")
+      .update({
+        title,
+        body_markdown: bodyMarkdown,
+        published,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("course_id", course.id)
+      .eq("slug", slug);
+    if (error) return { error: error.message };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't save the page. Try again." };
+  }
 
   revalidatePath("/pages");
   revalidatePath(`/pages/${slug}`);

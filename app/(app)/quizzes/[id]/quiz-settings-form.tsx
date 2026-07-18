@@ -1,0 +1,41 @@
+"use client";
+
+import { useActionState } from "react";
+import { FormError, SubmitButton } from "../../ui/form-controls";
+
+/**
+ * Quiz behavior settings form. Server-action failures come back through
+ * useActionState and render inline in the FormError banner instead of
+ * bouncing the exec to the generic error page.
+ */
+export function QuizSettingsForm({
+  action,
+  shuffleQuestions,
+  showCorrectAfter,
+}: {
+  action: (prev: { error?: string }, formData: FormData) => Promise<{ error?: string }>;
+  shuffleQuestions: boolean;
+  showCorrectAfter: boolean;
+}) {
+  const [state, formAction] = useActionState(action, {});
+
+  return (
+    <form action={formAction} className="flex flex-col gap-3 border-t border-hair px-4 py-4">
+      <FormError error={state?.error} />
+      <label className="flex items-center gap-2 text-sm text-text">
+        <input type="checkbox" name="shuffle_questions" defaultChecked={shuffleQuestions} className="h-4 w-4" />
+        Shuffle question order for each member
+      </label>
+      <label className="flex items-center gap-2 text-sm text-text">
+        <input type="checkbox" name="show_correct_after" defaultChecked={showCorrectAfter} className="h-4 w-4" />
+        Show correct answers &amp; explanations after a member submits
+      </label>
+      <SubmitButton
+        pendingText="Saving…"
+        className="self-start rounded-md bg-blue px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-sky"
+      >
+        Save settings
+      </SubmitButton>
+    </form>
+  );
+}

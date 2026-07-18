@@ -7,134 +7,170 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 // RLS re-enforces exec-only on quiz authoring regardless of the UI gate.
-export async function createQuiz(formData: FormData) {
-  const title = String(formData.get("title") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
-  if (!title) throw new Error("Title is required.");
+export async function createQuiz(
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  let newId = "";
+  try {
+    const title = String(formData.get("title") ?? "").trim();
+    const description = String(formData.get("description") ?? "").trim();
+    if (!title) return { error: "Give the quiz a title." };
 
-  const supabase = await createClient();
-  const course = await getCurrentCourse();
-  if (!course) throw new Error("No active course found.");
+    const supabase = await createClient();
+    const course = await getCurrentCourse();
+    if (!course) {
+      return { error: "No active course found — set an active course before creating a quiz." };
+    }
 
-  const { data, error } = await supabase
-    .from("quizzes")
-    .insert({ course_id: course.id, title, description: description || null, published: false })
-    .select("id")
-    .single();
-  if (error) throw new Error(error.message);
+    const { data, error } = await supabase
+      .from("quizzes")
+      .insert({ course_id: course.id, title, description: description || null, published: false })
+      .select("id")
+      .single();
+    if (error) return { error: error.message };
+    newId = data.id;
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't create the quiz. Try again." };
+  }
 
   revalidatePath("/quizzes");
-  redirect(`/quizzes/${data.id}`);
+  redirect(`/quizzes/${newId}`);
 }
 
-export async function addQuestion(quizId: string, formData: FormData) {
-  const questionText = String(formData.get("question_text") ?? "").trim();
-  const questionType = String(formData.get("question_type") ?? "");
-  const points = Number(formData.get("points"));
-  if (!questionText) throw new Error("Question text is required.");
-  if (
-    ![
-      "multiple_choice",
-      "true_false",
-      "short_answer",
-      "essay",
-      "numeric",
-      "multiple_answer",
-    ].includes(questionType)
-  ) {
-    throw new Error("Invalid question type.");
-  }
-
-  const supabase = await createClient();
-  const { data: last } = await supabase
-    .from("quiz_questions")
-    .select("position")
-    .eq("quiz_id", quizId)
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const explanation = String(formData.get("explanation") ?? "").trim() || null;
-  const { data: question, error } = await supabase
-    .from("quiz_questions")
-    .insert({
-      quiz_id: quizId,
-      question_text: questionText,
-      question_type: questionType,
-      points: Number.isNaN(points) ? 1 : points,
-      position: (last?.position ?? -1) + 1,
-      explanation,
-    })
-    .select("id")
-    .single();
-  if (error) throw new Error(error.message);
-
-  // Build answer options for the objective types.
-  const answers: {
-    question_id: string;
-    answer_text: string;
-    is_correct: boolean;
-    position: number;
-    tolerance?: number | null;
-  }[] = [];
-  if (questionType === "true_false") {
-    const correct = String(formData.get("tf_correct") ?? "true");
-    answers.push({ question_id: question.id, answer_text: "True", is_correct: correct === "true", position: 0 });
-    answers.push({ question_id: question.id, answer_text: "False", is_correct: correct === "false", position: 1 });
-  } else if (questionType === "multiple_choice") {
-    const correctIdx = String(formData.get("mc_correct") ?? "0");
-    for (let i = 0; i < 5; i++) {
-      const text = String(formData.get(`option_${i}`) ?? "").trim();
-      if (!text) continue;
-      answers.push({ question_id: question.id, answer_text: text, is_correct: String(i) === correctIdx, position: i });
+export async function addQuestion(
+  quizId: string,
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  try {
+    const questionText = String(formData.get("question_text") ?? "").trim();
+    const questionType = String(formData.get("question_type") ?? "");
+    const points = Number(formData.get("points"));
+    if (!questionText) return { error: "Enter the question text." };
+    if (
+      ![
+        "multiple_choice",
+        "true_false",
+        "short_answer",
+        "essay",
+        "numeric",
+        "multiple_answer",
+      ].includes(questionType)
+    ) {
+      return { error: "Choose a valid question type." };
     }
-    if (answers.length < 2) throw new Error("Add at least two options for a multiple-choice question.");
-    if (!answers.some((a) => a.is_correct)) throw new Error("Mark one option as correct.");
-  } else if (questionType === "multiple_answer") {
-    // Select-all-that-apply: each option can be independently correct.
-    for (let i = 0; i < 5; i++) {
-      const text = String(formData.get(`option_${i}`) ?? "").trim();
-      if (!text) continue;
-      const isCorrect = formData.get(`ma_correct_${i}`) === "on";
-      answers.push({ question_id: question.id, answer_text: text, is_correct: isCorrect, position: i });
-    }
-    if (answers.length < 2) throw new Error("Add at least two options.");
-    if (!answers.some((a) => a.is_correct)) throw new Error("Mark at least one option as correct.");
-  } else if (questionType === "numeric") {
-    // Store the correct value + tolerance as one exec-only answer row.
-    const value = Number(formData.get("numeric_answer"));
-    if (Number.isNaN(value)) throw new Error("Enter the correct numeric answer.");
-    const tolRaw = Number(formData.get("numeric_tolerance"));
-    const tolerance = Number.isNaN(tolRaw) ? 0 : Math.abs(tolRaw);
-    answers.push({
-      question_id: question.id,
-      answer_text: String(value),
-      is_correct: true,
-      position: 0,
-      tolerance,
-    });
-  }
 
-  if (answers.length > 0) {
-    const { error: aErr } = await supabase.from("quiz_answers").insert(answers);
-    if (aErr) throw new Error(aErr.message);
+    const supabase = await createClient();
+    const { data: last } = await supabase
+      .from("quiz_questions")
+      .select("position")
+      .eq("quiz_id", quizId)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const explanation = String(formData.get("explanation") ?? "").trim() || null;
+    const { data: question, error } = await supabase
+      .from("quiz_questions")
+      .insert({
+        quiz_id: quizId,
+        question_text: questionText,
+        question_type: questionType,
+        points: Number.isNaN(points) ? 1 : points,
+        position: (last?.position ?? -1) + 1,
+        explanation,
+      })
+      .select("id")
+      .single();
+    if (error) return { error: error.message };
+
+    // Build answer options for the objective types.
+    const answers: {
+      question_id: string;
+      answer_text: string;
+      is_correct: boolean;
+      position: number;
+      tolerance?: number | null;
+    }[] = [];
+    if (questionType === "true_false") {
+      const correct = String(formData.get("tf_correct") ?? "true");
+      answers.push({ question_id: question.id, answer_text: "True", is_correct: correct === "true", position: 0 });
+      answers.push({ question_id: question.id, answer_text: "False", is_correct: correct === "false", position: 1 });
+    } else if (questionType === "multiple_choice") {
+      const correctIdx = String(formData.get("mc_correct") ?? "0");
+      for (let i = 0; i < 5; i++) {
+        const text = String(formData.get(`option_${i}`) ?? "").trim();
+        if (!text) continue;
+        answers.push({ question_id: question.id, answer_text: text, is_correct: String(i) === correctIdx, position: i });
+      }
+      if (answers.length < 2) {
+        return { error: "Multiple-choice questions need at least two answer options." };
+      }
+      if (!answers.some((a) => a.is_correct)) return { error: "Mark which option is correct." };
+    } else if (questionType === "multiple_answer") {
+      // Select-all-that-apply: each option can be independently correct.
+      for (let i = 0; i < 5; i++) {
+        const text = String(formData.get(`option_${i}`) ?? "").trim();
+        if (!text) continue;
+        const isCorrect = formData.get(`ma_correct_${i}`) === "on";
+        answers.push({ question_id: question.id, answer_text: text, is_correct: isCorrect, position: i });
+      }
+      if (answers.length < 2) {
+        return { error: "Multiple-answer questions need at least two answer options." };
+      }
+      if (!answers.some((a) => a.is_correct)) {
+        return { error: "Mark at least one option as correct." };
+      }
+    } else if (questionType === "numeric") {
+      // Store the correct value + tolerance as one exec-only answer row.
+      const value = Number(formData.get("numeric_answer"));
+      if (Number.isNaN(value)) return { error: "Numeric answers need a correct value." };
+      const tolRaw = Number(formData.get("numeric_tolerance"));
+      const tolerance = Number.isNaN(tolRaw) ? 0 : Math.abs(tolRaw);
+      answers.push({
+        question_id: question.id,
+        answer_text: String(value),
+        is_correct: true,
+        position: 0,
+        tolerance,
+      });
+    }
+
+    if (answers.length > 0) {
+      const { error: aErr } = await supabase.from("quiz_answers").insert(answers);
+      if (aErr) return { error: aErr.message };
+    }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't add the question. Try again." };
   }
 
   revalidatePath(`/quizzes/${quizId}`);
+  return {};
 }
 
 // Quiz behavior settings (exec). RLS re-enforces exec-only on the write.
-export async function updateQuizSettings(quizId: string, formData: FormData) {
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("quizzes")
-    .update({
-      shuffle_questions: formData.get("shuffle_questions") === "on",
-      show_correct_after: formData.get("show_correct_after") === "on",
-    })
-    .eq("id", quizId);
-  if (error) throw new Error(error.message);
+export async function updateQuizSettings(
+  quizId: string,
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("quizzes")
+      .update({
+        shuffle_questions: formData.get("shuffle_questions") === "on",
+        show_correct_after: formData.get("show_correct_after") === "on",
+      })
+      .eq("id", quizId);
+    if (error) return { error: error.message };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't save settings. Try again." };
+  }
+
   revalidatePath(`/quizzes/${quizId}`);
+  return {};
 }
 
 export async function toggleQuizPublished(quizId: string, currentlyPublished: boolean) {

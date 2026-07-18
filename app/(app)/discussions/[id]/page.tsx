@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createDiscussionReply } from "../actions";
-import { SubmitButton } from "../../ui/form-controls";
+import { ReplyForm } from "./reply-form";
 
 type Topic = {
   id: string;
@@ -97,21 +97,15 @@ export default async function DiscussionDetailPage({
           ))}
         </ul>
 
-        <form action={rootReplyAction} className="mt-6 flex flex-col gap-3">
-          <textarea
-            name="body"
-            required
-            rows={3}
-            placeholder="Add a reply…"
-            className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-          />
-          <SubmitButton
-            pendingText="Posting…"
-            className="self-start rounded-md bg-blue px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-sky"
-          >
-            Reply
-          </SubmitButton>
-        </form>
+        <ReplyForm
+          action={rootReplyAction}
+          rows={3}
+          placeholder="Add a reply…"
+          submitLabel="Reply"
+          formClassName="mt-6 flex flex-col gap-3"
+          textareaClassName="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
+          buttonClassName="self-start rounded-md bg-blue px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-sky"
+        />
       </div>
     </div>
   );
@@ -137,21 +131,15 @@ function ReplyCard({
       {allowNesting && (
         <details className="mt-2">
           <summary className="cursor-pointer text-xs text-sky">Reply</summary>
-          <form action={nestedAction} className="mt-2 flex flex-col gap-2">
-            <textarea
-              name="body"
-              required
-              rows={2}
-              placeholder="Reply to this…"
-              className="w-full rounded-md border border-hair bg-white px-3 py-1.5 text-sm text-text outline-none focus:border-blue"
-            />
-            <SubmitButton
-              pendingText="Posting…"
-              className="self-start rounded-md border border-hair px-3 py-1 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
-            >
-              Post reply
-            </SubmitButton>
-          </form>
+          <ReplyForm
+            action={nestedAction}
+            rows={2}
+            placeholder="Reply to this…"
+            submitLabel="Post reply"
+            formClassName="mt-2 flex flex-col gap-2"
+            textareaClassName="w-full rounded-md border border-hair bg-white px-3 py-1.5 text-sm text-text outline-none focus:border-blue"
+            buttonClassName="self-start rounded-md border border-hair px-3 py-1 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
+          />
         </details>
       )}
     </div>

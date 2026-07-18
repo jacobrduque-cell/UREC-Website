@@ -8,34 +8,55 @@ import { revalidatePath } from "next/cache";
 // RLS re-enforces exec-only on course_sections/groups/enrollments/
 // group_memberships writes regardless of the UI gate on these pages —
 // same pattern used throughout.
-export async function createSection(formData: FormData) {
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) throw new Error("Section name is required.");
+export async function createSection(
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  try {
+    const name = String(formData.get("name") ?? "").trim();
+    if (!name) return { error: "Give the section a name." };
 
-  const course = await getCurrentCourse();
-  if (!course) throw new Error("No active course found.");
+    const course = await getCurrentCourse();
+    if (!course) return { error: "No active course found. Set one up first." };
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("course_sections")
-    .insert({ course_id: course.id, name });
-  if (error) throw new Error(error.message);
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("course_sections")
+      .insert({ course_id: course.id, name });
+    if (error) return { error: error.message };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Couldn't create the section. Try again.",
+    };
+  }
 
   revalidatePath("/directory/sections");
+  return {};
 }
 
-export async function assignSection(enrollmentId: string, formData: FormData) {
-  const sectionId = String(formData.get("section_id") ?? "") || null;
+export async function assignSection(
+  enrollmentId: string,
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  try {
+    const sectionId = String(formData.get("section_id") ?? "") || null;
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("enrollments")
-    .update({ section_id: sectionId })
-    .eq("id", enrollmentId);
-  if (error) throw new Error(error.message);
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("enrollments")
+      .update({ section_id: sectionId })
+      .eq("id", enrollmentId);
+    if (error) return { error: error.message };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Couldn't update the section. Try again.",
+    };
+  }
 
   revalidatePath("/directory");
   revalidatePath("/directory/sections");
+  return {};
 }
 
 // Add people to the active course by pasting @berkeley.edu emails. A
@@ -45,84 +66,96 @@ export async function assignSection(enrollmentId: string, formData: FormData) {
 // client after an explicit exec check — inserting an enrollment for
 // someone else, and reading users across the whole table, is exactly
 // what RLS forbids for a normal request, so we gate it in code instead.
-export async function enrollMembers(formData: FormData) {
-  if (!(await getIsExec())) throw new Error("Only exec can add people.");
+export async function enrollMembers(
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  try {
+    if (!(await getIsExec())) return { error: "Only exec can add people." };
 
-  const course = await getCurrentCourse();
-  if (!course) throw new Error("No active course found.");
+    const course = await getCurrentCourse();
+    if (!course) return { error: "No active course found. Set one up first." };
 
-  const roleId = String(formData.get("role_id") ?? "").trim();
-  if (!roleId) throw new Error("Pick a role.");
-  const sectionId = String(formData.get("section_id") ?? "") || null;
+    const roleId = String(formData.get("role_id") ?? "").trim();
+    if (!roleId) return { error: "Pick a role for the members you're adding." };
+    const sectionId = String(formData.get("section_id") ?? "") || null;
 
-  // Accept commas, whitespace, or newlines between addresses.
-  const raw = String(formData.get("emails") ?? "");
-  const emails = Array.from(
-    new Set(
-      raw
-        .split(/[\s,;]+/)
-        .map((e) => e.trim().toLowerCase())
-        .filter(Boolean),
-    ),
-  );
-  if (emails.length === 0) throw new Error("Enter at least one email.");
+    // Accept commas, whitespace, or newlines between addresses.
+    const raw = String(formData.get("emails") ?? "");
+    const emails = Array.from(
+      new Set(
+        raw
+          .split(/[\s,;]+/)
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+    if (emails.length === 0) return { error: "Paste at least one @berkeley.edu email." };
 
-  const bad = emails.filter((e) => !e.endsWith("@berkeley.edu"));
-  if (bad.length > 0) {
-    throw new Error(`Not a @berkeley.edu address: ${bad.slice(0, 3).join(", ")}`);
-  }
+    const bad = emails.filter((e) => !e.endsWith("@berkeley.edu"));
+    if (bad.length > 0) {
+      return {
+        error: `These don't look like valid @berkeley.edu emails: ${bad.slice(0, 3).join(", ")}`,
+      };
+    }
 
-  const admin = createAdminClient();
+    const admin = createAdminClient();
 
-  // Who already has an account? Those get real enrollments now; the rest
-  // get parked as pending invites.
-  const { data: existing } = await admin
-    .from("users")
-    .select("id, email")
-    .in("email", emails);
-  const byEmail = new Map(
-    ((existing ?? []) as { id: string; email: string }[]).map((u) => [
-      u.email.toLowerCase(),
-      u.id,
-    ]),
-  );
+    // Who already has an account? Those get real enrollments now; the rest
+    // get parked as pending invites.
+    const { data: existing } = await admin
+      .from("users")
+      .select("id, email")
+      .in("email", emails);
+    const byEmail = new Map(
+      ((existing ?? []) as { id: string; email: string }[]).map((u) => [
+        u.email.toLowerCase(),
+        u.id,
+      ]),
+    );
 
-  const enrollRows = emails
-    .filter((e) => byEmail.has(e))
-    .map((e) => ({
-      user_id: byEmail.get(e)!,
-      course_id: course.id,
-      section_id: sectionId,
-      role_id: roleId,
-    }));
-  const pendingRows = emails
-    .filter((e) => !byEmail.has(e))
-    .map((e) => ({
-      email: e,
-      course_id: course.id,
-      section_id: sectionId,
-      role_id: roleId,
-    }));
+    const enrollRows = emails
+      .filter((e) => byEmail.has(e))
+      .map((e) => ({
+        user_id: byEmail.get(e)!,
+        course_id: course.id,
+        section_id: sectionId,
+        role_id: roleId,
+      }));
+    const pendingRows = emails
+      .filter((e) => !byEmail.has(e))
+      .map((e) => ({
+        email: e,
+        course_id: course.id,
+        section_id: sectionId,
+        role_id: roleId,
+      }));
 
-  if (enrollRows.length > 0) {
-    // Don't clobber existing members: re-pasting a roster to add a few
-    // new analysts must not silently downgrade someone already enrolled
-    // as a Grader (or reset their section) just because their email is in
-    // the box with a different role selected. Insert new enrollments only;
-    // changing an existing member's role/section is done per-row above.
-    const { error } = await admin
-      .from("enrollments")
-      .upsert(enrollRows, { onConflict: "user_id,course_id", ignoreDuplicates: true });
-    if (error) throw new Error(error.message);
-  }
-  if (pendingRows.length > 0) {
-    const { error } = await admin
-      .from("pending_enrollments")
-      .upsert(pendingRows, { onConflict: "email,course_id" });
-    if (error) throw new Error(error.message);
+    if (enrollRows.length > 0) {
+      // Don't clobber existing members: re-pasting a roster to add a few
+      // new analysts must not silently downgrade someone already enrolled
+      // as a Grader (or reset their section) just because their email is in
+      // the box with a different role selected. Insert new enrollments only;
+      // changing an existing member's role/section is done per-row above.
+      const { error } = await admin
+        .from("enrollments")
+        .upsert(enrollRows, { onConflict: "user_id,course_id", ignoreDuplicates: true });
+      if (error) return { error: error.message };
+    }
+    if (pendingRows.length > 0) {
+      const { error } = await admin
+        .from("pending_enrollments")
+        .upsert(pendingRows, { onConflict: "email,course_id" });
+      if (error) return { error: error.message };
+    }
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Couldn't add those people. Try again.",
+    };
   }
 
   revalidatePath("/directory");
+  return {};
 }
 
 export async function removeEnrollment(enrollmentId: string) {
@@ -148,20 +181,30 @@ export async function removePending(pendingId: string) {
   revalidatePath("/directory");
 }
 
-export async function createGroup(formData: FormData) {
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) throw new Error("Group name is required.");
+export async function createGroup(
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  try {
+    const name = String(formData.get("name") ?? "").trim();
+    if (!name) return { error: "Give the group a name." };
 
-  const course = await getCurrentCourse();
-  if (!course) throw new Error("No active course found.");
+    const course = await getCurrentCourse();
+    if (!course) return { error: "No active course found. Set one up first." };
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("groups")
-    .insert({ course_id: course.id, name });
-  if (error) throw new Error(error.message);
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("groups")
+      .insert({ course_id: course.id, name });
+    if (error) return { error: error.message };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Couldn't create the group. Try again.",
+    };
+  }
 
   revalidatePath("/directory/groups");
+  return {};
 }
 
 export async function assignGroup(userId: string, groupId: string | null, formData: FormData) {

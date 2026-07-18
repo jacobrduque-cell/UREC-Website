@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { MarkdownField } from "../ui/markdown-field";
-import { SubmitButton } from "../ui/form-controls";
+import { FormError, SubmitButton } from "../ui/form-controls";
 
 const OPTION_COUNT = 5;
 const input =
@@ -12,15 +12,17 @@ const smallLabel = "mb-1.5 block text-xs font-semibold uppercase tracking-wide t
 export function AddQuestionForm({
   action,
 }: {
-  action: (formData: FormData) => void | Promise<void>;
+  action: (prev: { error?: string }, formData: FormData) => Promise<{ error?: string }>;
 }) {
+  const [state, formAction] = useActionState(action, {});
   const [type, setType] = useState("multiple_choice");
   const options = Array.from({ length: OPTION_COUNT });
 
   return (
     <div className="mt-8 border-t border-hair pt-6">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Add Question</h2>
-      <form action={action} className="mt-3 flex flex-col gap-4">
+      <form action={formAction} className="mt-3 flex flex-col gap-4">
+        <FormError error={state?.error} />
         <div>
           <label className={smallLabel}>Question</label>
           <MarkdownField
@@ -104,7 +106,7 @@ export function AddQuestionForm({
           <div className="grid grid-cols-2 gap-4 rounded-md border border-hair bg-[#fafbfb] p-3">
             <div>
               <label className={smallLabel}>Correct value</label>
-              <input name="numeric_answer" type="number" step="any" placeholder="5.5" className={input} />
+              <input name="numeric_answer" type="number" step="any" required placeholder="5.5" className={input} />
             </div>
             <div>
               <label className={smallLabel}>Tolerance (±)</label>

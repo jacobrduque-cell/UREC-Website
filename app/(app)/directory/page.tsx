@@ -3,6 +3,8 @@ import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
 import Link from "next/link";
 import { assignSection, enrollMembers, removeEnrollment, removePending } from "./actions";
 import { ConfirmSubmitButton } from "../ui/form-controls";
+import { EnrollForm } from "./enroll-form";
+import { SectionAssignForm } from "./section-assign-form";
 
 type EnrollmentRow = {
   id: string;
@@ -144,61 +146,12 @@ export default async function DirectoryPage({
           <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-navy-deep">
             + Add people
           </summary>
-          <form action={enrollMembers} className="border-t border-hair px-4 py-4">
-            <label className="block text-xs font-medium text-muted">
-              Berkeley emails
-              <textarea
-                name="emails"
-                rows={3}
-                required
-                placeholder="one or many, separated by commas, spaces, or new lines&#10;jane@berkeley.edu, john@berkeley.edu"
-                className="mt-1 w-full rounded-md border border-hair bg-white px-3 py-2 text-sm text-text outline-none focus:border-blue"
-              />
-            </label>
-            <div className="mt-3 flex flex-wrap items-end gap-3">
-              <label className="text-xs font-medium text-muted">
-                Role
-                <select
-                  name="role_id"
-                  required
-                  defaultValue={roles.find((r) => r.name === "Analyst")?.id ?? ""}
-                  className="mt-1 block rounded-md border border-hair bg-white px-2 py-1.5 text-sm text-text outline-none focus:border-blue"
-                >
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs font-medium text-muted">
-                Section
-                <select
-                  name="section_id"
-                  defaultValue=""
-                  className="mt-1 block rounded-md border border-hair bg-white px-2 py-1.5 text-sm text-text outline-none focus:border-blue"
-                >
-                  <option value="">No section</option>
-                  {sections.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="submit"
-                className="rounded-md bg-sky px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-navy"
-              >
-                Add to course
-              </button>
-            </div>
-            <p className="mt-3 text-xs text-muted">
-              People who&rsquo;ve signed in are added right away. Anyone who
-              hasn&rsquo;t is invited &mdash; they&rsquo;re enrolled automatically
-              the first time they log in with Google.
-            </p>
-          </form>
+          <EnrollForm
+            action={enrollMembers}
+            roles={roles}
+            sections={sections}
+            defaultRoleId={roles.find((r) => r.name === "Analyst")?.id ?? ""}
+          />
         </details>
       )}
 
@@ -299,26 +252,11 @@ export default async function DirectoryPage({
                   {r.role?.name ?? "Member"}
                 </span>
                 {isExec && sections.length > 0 && (
-                  <form action={sectionAction} className="flex items-center gap-1.5">
-                    <select
-                      name="section_id"
-                      defaultValue={r.section?.id ?? ""}
-                      className="rounded-md border border-hair bg-white px-2 py-1 text-xs text-text outline-none focus:border-blue"
-                    >
-                      <option value="">No section</option>
-                      {sections.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="submit"
-                      className="whitespace-nowrap rounded-md border border-hair px-2 py-1 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
-                    >
-                      Save
-                    </button>
-                  </form>
+                  <SectionAssignForm
+                    action={sectionAction}
+                    sections={sections}
+                    currentSectionId={r.section?.id ?? ""}
+                  />
                 )}
                 {isExec && (
                   <form action={removeAction}>

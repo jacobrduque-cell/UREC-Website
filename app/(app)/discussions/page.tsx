@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse } from "@/lib/data/queries";
 import Link from "next/link";
 import { createTopic } from "./actions";
-import { SubmitButton } from "../ui/form-controls";
+import { NewTopicForm } from "./new-topic-form";
 
 type TopicRow = {
   id: string;
@@ -65,27 +65,7 @@ export default async function DiscussionsPage() {
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
           Start a Topic
         </h2>
-        <form action={createTopic} className="mt-3 flex flex-col gap-3">
-          <input
-            name="title"
-            required
-            placeholder="Topic title"
-            className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-          />
-          <textarea
-            name="body"
-            required
-            rows={4}
-            placeholder="What do you want to discuss?"
-            className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-          />
-          <SubmitButton
-            pendingText="Posting…"
-            className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
-          >
-            Post Topic
-          </SubmitButton>
-        </form>
+        <NewTopicForm action={createTopic} />
       </div>
     </div>
   );

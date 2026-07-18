@@ -9,6 +9,8 @@ import {
   toggleModulePublished,
 } from "./actions";
 import { ConfirmSubmitButton } from "../ui/form-controls";
+import { ModuleForm } from "./module-form";
+import { AddItemForm } from "./add-item-form";
 
 type ModuleItem = {
   id: string;
@@ -170,7 +172,7 @@ export default async function ModulesPage() {
 
               {isExec && (
                 <AddItemForm
-                  moduleId={m.id}
+                  action={addModuleItem.bind(null, m.id)}
                   assignments={(assignments ?? []) as { id: string; title: string }[]}
                   pages={(pages ?? []) as { id: string; title: string }[]}
                   quizzes={(quizzes ?? []) as { id: string; title: string }[]}
@@ -187,20 +189,7 @@ export default async function ModulesPage() {
       {isExec && (
         <div className="mt-8 border-t border-hair pt-6">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">New Module</h2>
-          <form action={createModule} className="mt-3 flex gap-3">
-            <input
-              name="name"
-              required
-              placeholder="e.g. Week 1 — Defining CRE"
-              className="flex-1 rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-            />
-            <button
-              type="submit"
-              className="whitespace-nowrap rounded-md bg-blue px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
-            >
-              Add Module
-            </button>
-          </form>
+          <ModuleForm action={createModule} />
         </div>
       )}
     </div>
@@ -218,70 +207,5 @@ function DeleteItemBtn({ itemId }: { itemId: string }) {
         Remove
       </ConfirmSubmitButton>
     </form>
-  );
-}
-
-function AddItemForm({
-  moduleId,
-  assignments,
-  pages,
-  quizzes,
-}: {
-  moduleId: string;
-  assignments: { id: string; title: string }[];
-  pages: { id: string; title: string }[];
-  quizzes: { id: string; title: string }[];
-}) {
-  return (
-    <details className="border-t border-hair bg-[#fafbfb]">
-      <summary className="cursor-pointer px-4 py-2.5 text-xs font-medium text-sky">
-        + Add item
-      </summary>
-      <div className="grid gap-3 px-4 pb-4 sm:grid-cols-2">
-        <form action={addModuleItem.bind(null, moduleId)} className="flex flex-col gap-2 rounded-md border border-hair bg-white p-3">
-          <input type="hidden" name="item_type" value="assignment" />
-          <label className="text-[10px] font-semibold uppercase tracking-wide text-muted">Assignment</label>
-          <select name="ref_id" className="rounded-md border border-hair px-2 py-1.5 text-sm outline-none focus:border-blue">
-            {assignments.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
-          </select>
-          <button className="self-start rounded-md border border-hair px-3 py-1 text-xs font-medium text-text hover:bg-[#eef7ff]">Add</button>
-        </form>
-
-        <form action={addModuleItem.bind(null, moduleId)} className="flex flex-col gap-2 rounded-md border border-hair bg-white p-3">
-          <input type="hidden" name="item_type" value="page" />
-          <label className="text-[10px] font-semibold uppercase tracking-wide text-muted">Page</label>
-          <select name="ref_id" className="rounded-md border border-hair px-2 py-1.5 text-sm outline-none focus:border-blue">
-            {pages.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-          </select>
-          <button className="self-start rounded-md border border-hair px-3 py-1 text-xs font-medium text-text hover:bg-[#eef7ff]">Add</button>
-        </form>
-
-        <form action={addModuleItem.bind(null, moduleId)} className="flex flex-col gap-2 rounded-md border border-hair bg-white p-3">
-          <input type="hidden" name="item_type" value="quiz" />
-          <label className="text-[10px] font-semibold uppercase tracking-wide text-muted">Quiz</label>
-          <select name="ref_id" className="rounded-md border border-hair px-2 py-1.5 text-sm outline-none focus:border-blue">
-            {quizzes.map((q) => <option key={q.id} value={q.id}>{q.title}</option>)}
-          </select>
-          <button className="self-start rounded-md border border-hair px-3 py-1 text-xs font-medium text-text hover:bg-[#eef7ff]">Add</button>
-        </form>
-
-        <form action={addModuleItem.bind(null, moduleId)} className="flex flex-col gap-2 rounded-md border border-hair bg-white p-3">
-          <input type="hidden" name="item_type" value="url" />
-          <label className="text-[10px] font-semibold uppercase tracking-wide text-muted">External link</label>
-          <input name="title" placeholder="Link text" className="rounded-md border border-hair px-2 py-1.5 text-sm outline-none focus:border-blue" />
-          <input name="url" placeholder="https://…" className="rounded-md border border-hair px-2 py-1.5 text-sm outline-none focus:border-blue" />
-          <button className="self-start rounded-md border border-hair px-3 py-1 text-xs font-medium text-text hover:bg-[#eef7ff]">Add</button>
-        </form>
-
-        <form action={addModuleItem.bind(null, moduleId)} className="flex flex-col gap-2 rounded-md border border-hair bg-white p-3 sm:col-span-2">
-          <input type="hidden" name="item_type" value="header" />
-          <label className="text-[10px] font-semibold uppercase tracking-wide text-muted">Text header (section label)</label>
-          <div className="flex gap-2">
-            <input name="title" placeholder="e.g. Readings" className="flex-1 rounded-md border border-hair px-2 py-1.5 text-sm outline-none focus:border-blue" />
-            <button className="rounded-md border border-hair px-3 py-1 text-xs font-medium text-text hover:bg-[#eef7ff]">Add</button>
-          </div>
-        </form>
-      </div>
-    </details>
   );
 }
