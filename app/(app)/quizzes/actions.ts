@@ -32,7 +32,16 @@ export async function addQuestion(quizId: string, formData: FormData) {
   const questionType = String(formData.get("question_type") ?? "");
   const points = Number(formData.get("points"));
   if (!questionText) throw new Error("Question text is required.");
-  if (!["multiple_choice", "true_false", "short_answer", "essay"].includes(questionType)) {
+  if (
+    ![
+      "multiple_choice",
+      "true_false",
+      "short_answer",
+      "essay",
+      "numeric",
+      "multiple_answer",
+    ].includes(questionType)
+  ) {
     throw new Error("Invalid question type.");
   }
 
@@ -59,7 +68,13 @@ export async function addQuestion(quizId: string, formData: FormData) {
   if (error) throw new Error(error.message);
 
   // Build answer options for the objective types.
-  const answers: { question_id: string; answer_text: string; is_correct: boolean; position: number }[] = [];
+  const answers: {
+    question_id: string;
+    answer_text: string;
+    is_correct: boolean;
+    position: number;
+    tolerance?: number | null;
+  }[] = [];
   if (questionType === "true_false") {
     const correct = String(formData.get("tf_correct") ?? "true");
     answers.push({ question_id: question.id, answer_text: "True", is_correct: correct === "true", position: 0 });
@@ -73,6 +88,29 @@ export async function addQuestion(quizId: string, formData: FormData) {
     }
     if (answers.length < 2) throw new Error("Add at least two options for a multiple-choice question.");
     if (!answers.some((a) => a.is_correct)) throw new Error("Mark one option as correct.");
+  } else if (questionType === "multiple_answer") {
+    // Select-all-that-apply: each option can be independently correct.
+    for (let i = 0; i < 5; i++) {
+      const text = String(formData.get(`option_${i}`) ?? "").trim();
+      if (!text) continue;
+      const isCorrect = formData.get(`ma_correct_${i}`) === "on";
+      answers.push({ question_id: question.id, answer_text: text, is_correct: isCorrect, position: i });
+    }
+    if (answers.length < 2) throw new Error("Add at least two options.");
+    if (!answers.some((a) => a.is_correct)) throw new Error("Mark at least one option as correct.");
+  } else if (questionType === "numeric") {
+    // Store the correct value + tolerance as one exec-only answer row.
+    const value = Number(formData.get("numeric_answer"));
+    if (Number.isNaN(value)) throw new Error("Enter the correct numeric answer.");
+    const tolRaw = Number(formData.get("numeric_tolerance"));
+    const tolerance = Number.isNaN(tolRaw) ? 0 : Math.abs(tolRaw);
+    answers.push({
+      question_id: question.id,
+      answer_text: String(value),
+      is_correct: true,
+      position: 0,
+      tolerance,
+    });
   }
 
   if (answers.length > 0) {
@@ -129,7 +167,7 @@ export async function submitQuiz(quizId: string, formData: FormData) {
   const admin = createAdminClient();
   const { data: questions } = await admin
     .from("quiz_questions")
-    .select("id, question_type, points, quiz_answers(id, is_correct)")
+    .select("id, question_type, points, quiz_answers(id, is_correct, answer_text, tolerance)")
     .eq("quiz_id", quizId);
 
   const { data: submission, error: sErr } = await admin
@@ -142,21 +180,48 @@ export async function submitQuiz(quizId: string, formData: FormData) {
     .single();
   if (sErr) throw new Error(sErr.message);
 
+  type AnswerRow = { id: string; is_correct: boolean; answer_text: string; tolerance: number | null };
   let score = 0;
   const responses = [];
   for (const q of questions ?? []) {
-    const raw = String(formData.get(`q_${q.id}`) ?? "").trim();
+    const answers = (q.quiz_answers ?? []) as AnswerRow[];
     let isCorrect: boolean | null = null;
+    let responseText: string | null = null;
+
     if (q.question_type === "multiple_choice" || q.question_type === "true_false") {
-      const answers = (q.quiz_answers ?? []) as { id: string; is_correct: boolean }[];
+      const raw = String(formData.get(`q_${q.id}`) ?? "").trim();
+      responseText = raw || null;
       const chosen = answers.find((a) => a.id === raw);
       isCorrect = Boolean(chosen?.is_correct);
       if (isCorrect) score += Number(q.points);
+    } else if (q.question_type === "multiple_answer") {
+      // Select-all: correct only if the chosen set is exactly the key set.
+      const chosen = [...new Set(formData.getAll(`q_${q.id}`).map(String))].sort();
+      responseText = chosen.join(",") || null;
+      const key = answers.filter((a) => a.is_correct).map((a) => a.id).sort();
+      isCorrect =
+        key.length > 0 && key.length === chosen.length && key.every((id, i) => id === chosen[i]);
+      if (isCorrect) score += Number(q.points);
+    } else if (q.question_type === "numeric") {
+      const raw = String(formData.get(`q_${q.id}`) ?? "").trim();
+      responseText = raw || null;
+      const key = answers[0];
+      const resp = Number(raw);
+      const target = key ? Number(key.answer_text) : NaN;
+      const tol = key ? Number(key.tolerance ?? 0) : 0;
+      isCorrect =
+        raw !== "" && !Number.isNaN(resp) && !Number.isNaN(target) && Math.abs(resp - target) <= tol;
+      if (isCorrect) score += Number(q.points);
+    } else {
+      // short_answer / essay — recorded for exec to grade later.
+      const raw = String(formData.get(`q_${q.id}`) ?? "").trim();
+      responseText = raw || null;
     }
+
     responses.push({
       quiz_submission_id: submission.id,
       question_id: q.id,
-      response_text: raw || null,
+      response_text: responseText,
       is_correct: isCorrect,
     });
   }

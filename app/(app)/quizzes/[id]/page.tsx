@@ -1,18 +1,52 @@
 import { createClient } from "@/lib/supabase/server";
 import { getIsExec } from "@/lib/data/queries";
+import { renderMarkdown } from "@/lib/markdown";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { addQuestion, submitQuiz, toggleQuizPublished } from "../actions";
+import { AddQuestionForm } from "../add-question-form";
 
-type Answer = { id: string; answer_text: string; is_correct: boolean; position: number };
+type QuestionType =
+  | "multiple_choice"
+  | "true_false"
+  | "short_answer"
+  | "essay"
+  | "numeric"
+  | "multiple_answer";
+type Answer = {
+  id: string;
+  answer_text: string;
+  is_correct: boolean;
+  position: number;
+  tolerance?: number | null;
+};
 type Question = {
   id: string;
   question_text: string;
-  question_type: "multiple_choice" | "true_false" | "short_answer" | "essay";
+  question_type: QuestionType;
   points: number;
   position: number;
   quiz_answers: Answer[];
 };
+
+const TYPE_LABEL: Record<QuestionType, string> = {
+  multiple_choice: "multiple choice",
+  multiple_answer: "multiple answer",
+  true_false: "true / false",
+  numeric: "numeric",
+  short_answer: "short answer",
+  essay: "essay",
+};
+
+// Question text is markdown (may include images). Rendered server-side.
+function QuestionText({ text }: { text: string }) {
+  return (
+    <div
+      className="rich-content text-sm text-text"
+      dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }}
+    />
+  );
+}
 
 export default async function QuizDetailPage({
   params,
@@ -52,7 +86,7 @@ export default async function QuizDetailPage({
     if (isExec) {
       const { data } = await supabase
         .from("quiz_answers")
-        .select("id, question_id, answer_text, is_correct, position")
+        .select("id, question_id, answer_text, is_correct, position, tolerance")
         .in("question_id", questionIds);
       for (const a of (data ?? []) as (Answer & { question_id: string })[]) {
         const arr = answersByQuestion.get(a.question_id) ?? [];
@@ -122,28 +156,42 @@ export default async function QuizDetailPage({
       {isExec ? (
         <div className="mt-8">
           <ul className="flex flex-col gap-4">
-            {questions.map((q, i) => (
-              <li key={q.id} className="rounded-md border border-hair bg-white p-4">
-                <p className="text-sm font-medium text-text">
-                  {i + 1}. {q.question_text}{" "}
-                  <span className="text-xs text-muted">({q.points} pts &middot; {q.question_type.replace("_", " ")})</span>
-                </p>
-                {q.quiz_answers.length > 0 && (
-                  <ul className="mt-2 flex flex-col gap-1">
-                    {[...q.quiz_answers].sort((a, b) => a.position - b.position).map((a) => (
-                      <li key={a.id} className={`text-sm ${a.is_correct ? "font-medium text-pos" : "text-muted"}`}>
-                        {a.is_correct ? "✓ " : "○ "}
-                        {a.answer_text}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))}
+            {questions.map((q, i) => {
+              const numericKey = q.question_type === "numeric" ? q.quiz_answers[0] : null;
+              return (
+                <li key={q.id} className="rounded-md border border-hair bg-white p-4">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-sm font-medium text-text">{i + 1}.</span>
+                    <div className="min-w-0 flex-1">
+                      <QuestionText text={q.question_text} />
+                    </div>
+                    <span className="whitespace-nowrap text-xs text-muted">
+                      {q.points} pts &middot; {TYPE_LABEL[q.question_type]}
+                    </span>
+                  </div>
+                  {numericKey && (
+                    <p className="mt-2 text-sm font-medium text-pos">
+                      ✓ {numericKey.answer_text}
+                      {Number(numericKey.tolerance) ? ` (±${numericKey.tolerance})` : ""}
+                    </p>
+                  )}
+                  {q.question_type !== "numeric" && q.quiz_answers.length > 0 && (
+                    <ul className="mt-2 flex flex-col gap-1">
+                      {[...q.quiz_answers].sort((a, b) => a.position - b.position).map((a) => (
+                        <li key={a.id} className={`text-sm ${a.is_correct ? "font-medium text-pos" : "text-muted"}`}>
+                          {a.is_correct ? "✓ " : "○ "}
+                          {a.answer_text}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
             {questions.length === 0 && <li className="text-sm text-muted">No questions yet.</li>}
           </ul>
 
-          <AddQuestionForm quizId={id} />
+          <AddQuestionForm action={addQuestion.bind(null, id)} />
         </div>
       ) : mySubmission?.submitted_at ? (
         /* Student — already submitted */
@@ -163,18 +211,36 @@ export default async function QuizDetailPage({
         <form action={submitQuiz.bind(null, id)} className="mt-8 flex flex-col gap-6">
           {questions.map((q, i) => (
             <div key={q.id} className="rounded-md border border-hair bg-white p-4">
-              <p className="text-sm font-medium text-text">
-                {i + 1}. {q.question_text}{" "}
-                <span className="text-xs text-muted">({q.points} pts)</span>
-              </p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-medium text-text">{i + 1}.</span>
+                <div className="min-w-0 flex-1">
+                  <QuestionText text={q.question_text} />
+                </div>
+                <span className="whitespace-nowrap text-xs text-muted">{q.points} pts</span>
+              </div>
               <div className="mt-3 flex flex-col gap-2">
-                {(q.question_type === "multiple_choice" || q.question_type === "true_false") ? (
+                {q.question_type === "multiple_choice" || q.question_type === "true_false" ? (
                   [...q.quiz_answers].sort((a, b) => a.position - b.position).map((a) => (
                     <label key={a.id} className="flex items-center gap-2 text-sm text-text">
                       <input type="radio" name={`q_${q.id}`} value={a.id} className="h-4 w-4" />
                       {a.answer_text}
                     </label>
                   ))
+                ) : q.question_type === "multiple_answer" ? (
+                  [...q.quiz_answers].sort((a, b) => a.position - b.position).map((a) => (
+                    <label key={a.id} className="flex items-center gap-2 text-sm text-text">
+                      <input type="checkbox" name={`q_${q.id}`} value={a.id} className="h-4 w-4" />
+                      {a.answer_text}
+                    </label>
+                  ))
+                ) : q.question_type === "numeric" ? (
+                  <input
+                    name={`q_${q.id}`}
+                    type="number"
+                    step="any"
+                    className="w-40 rounded-md border border-hair bg-white px-3 py-2 text-sm text-text outline-none focus:border-blue"
+                    placeholder="Your answer"
+                  />
                 ) : q.question_type === "short_answer" ? (
                   <input
                     name={`q_${q.id}`}
@@ -208,63 +274,3 @@ export default async function QuizDetailPage({
   );
 }
 
-function AddQuestionForm({ quizId }: { quizId: string }) {
-  const optionRows = Array.from({ length: 4 });
-  return (
-    <div className="mt-8 border-t border-hair pt-6">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Add Question</h2>
-      <form action={addQuestion.bind(null, quizId)} className="mt-3 flex flex-col gap-4">
-        <textarea
-          name="question_text"
-          required
-          rows={2}
-          placeholder="Question text"
-          className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
-        />
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">Type</label>
-            <select name="question_type" defaultValue="multiple_choice" className="w-full rounded-md border border-hair bg-white px-3 py-2 text-sm outline-none focus:border-blue">
-              <option value="multiple_choice">Multiple choice</option>
-              <option value="true_false">True / False</option>
-              <option value="short_answer">Short answer</option>
-              <option value="essay">Essay</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">Points</label>
-            <input name="points" type="number" min={0} step="0.5" defaultValue={1} className="w-full rounded-md border border-hair bg-white px-3 py-2 text-sm outline-none focus:border-blue" />
-          </div>
-        </div>
-
-        <div className="rounded-md border border-hair bg-[#fafbfb] p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-            Multiple choice — fill options, pick correct (leave blank for other types)
-          </p>
-          <div className="mt-2 flex flex-col gap-2">
-            {optionRows.map((_, i) => (
-              <label key={i} className="flex items-center gap-2">
-                <input type="radio" name="mc_correct" value={i} defaultChecked={i === 0} className="h-4 w-4" />
-                <input name={`option_${i}`} placeholder={`Option ${i + 1}`} className="flex-1 rounded-md border border-hair bg-white px-2 py-1.5 text-sm outline-none focus:border-blue" />
-              </label>
-            ))}
-          </div>
-          <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-muted">
-            True / False — correct answer
-          </p>
-          <div className="mt-1 flex gap-4 text-sm">
-            <label className="flex items-center gap-1.5"><input type="radio" name="tf_correct" value="true" defaultChecked className="h-4 w-4" /> True</label>
-            <label className="flex items-center gap-1.5"><input type="radio" name="tf_correct" value="false" className="h-4 w-4" /> False</label>
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          className="self-start rounded-md bg-blue px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-sky"
-        >
-          Add Question
-        </button>
-      </form>
-    </div>
-  );
-}

@@ -63,6 +63,15 @@ before(async () => {
        ('22222222-0000-0000-0000-000000000001','4',true,0),
        ('22222222-0000-0000-0000-000000000001','5',false,1)`,
   );
+  // A numeric question — its correct value must never reach the taker.
+  await db.query(
+    `insert into public.quiz_questions (id, quiz_id, question_text, question_type, points, position)
+       values ('22222222-0000-0000-0000-000000000002','11111111-0000-0000-0000-000000000001','cap rate?','numeric',1,1)`,
+  );
+  await db.query(
+    `insert into public.quiz_answers (question_id, answer_text, is_correct, position, tolerance)
+       values ('22222222-0000-0000-0000-000000000002','5.5',true,0,0.1)`,
+  );
   await db.query(
     `insert into public.quiz_submissions (id, quiz_id, user_id, score, submitted_at)
        values ('33333333-0000-0000-0000-000000000001','11111111-0000-0000-0000-000000000001',$1,0,now())`,
@@ -459,7 +468,11 @@ test("quiz_answer_options view does not expose is_correct", async () => {
 });
 
 test("exec CAN still read the quiz answer key", async () => {
-  const r = await tryAsUser(db, EXEC, `select count(*)::int n from public.quiz_answers`);
+  const r = await tryAsUser(
+    db,
+    EXEC,
+    `select count(*)::int n from public.quiz_answers where question_id='22222222-0000-0000-0000-000000000001'`,
+  );
   assert.equal(r.rows[0].n, 2);
 });
 
@@ -524,4 +537,23 @@ test("a member can start a conversation, add a recipient, and post the first mes
     ).rows[0].n;
   });
   assert.equal(count, 1, "the start-conversation flow must pass RLS end to end");
+});
+
+test("student cannot read a numeric question's answer via the options view", async () => {
+  const r = await tryAsUser(
+    db,
+    STU,
+    `select count(*)::int n from public.quiz_answer_options where question_id='22222222-0000-0000-0000-000000000002'`,
+  );
+  assert.equal(r.rows[0].n, 0, "numeric answers must be excluded from the takers' view");
+});
+
+test("exec can read the numeric answer key", async () => {
+  const r = await tryAsUser(
+    db,
+    EXEC,
+    `select answer_text, tolerance from public.quiz_answers where question_id='22222222-0000-0000-0000-000000000002'`,
+  );
+  assert.equal(r.ok, true);
+  assert.equal(Number(r.rows[0].answer_text), 5.5);
 });
