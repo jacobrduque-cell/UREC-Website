@@ -261,6 +261,30 @@ test("a member sees their own attendance but not a classmate's", async () => {
   assert.equal(other.rows[0].n, 0);
 });
 
+// ---- Notification preferences (20260717002100) ----
+test("a member manages only their own notification prefs", async () => {
+  const ok = await tryAsUser(
+    db, STU,
+    `insert into public.notification_prefs (user_id, type, channel) values ($1,'new_announcement','off')`,
+    [STU],
+  );
+  assert.equal(ok.ok, true);
+  // Cannot write a pref for someone else.
+  const bad = await tryAsUser(
+    db, STU,
+    `insert into public.notification_prefs (user_id, type, channel) values ($1,'new_announcement','off')`,
+    [OTHER],
+  );
+  assert.equal(bad.ok, false, "must not set another member's prefs");
+  // Cannot read someone else's pref.
+  await db.query(
+    `insert into public.notification_prefs (user_id, type, channel) values ($1,'new_assignment','off') on conflict do nothing`,
+    [OTHER],
+  );
+  const read = await tryAsUser(db, STU, `select count(*)::int n from public.notification_prefs where user_id=$1`, [OTHER]);
+  assert.equal(read.rows[0].n, 0);
+});
+
 // ---- Pending-enrollment trigger (fix: 20260717001600) ----
 test("signup trigger redeems a pending enrollment into a real one", async () => {
   const analyst = (await db.query(`select id from public.roles where name='Analyst'`)).rows[0].id;

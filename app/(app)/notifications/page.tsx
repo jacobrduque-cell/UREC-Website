@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
 import { markNotificationRead, markAllNotificationsRead } from "./actions";
 
 type NotificationRow = {
@@ -38,16 +39,21 @@ export default async function NotificationsPage() {
         <h1 className="font-display text-2xl font-bold text-navy-deep">
           Notifications
         </h1>
-        {unreadCount > 0 && (
-          <form action={markAllNotificationsRead}>
-            <button
-              type="submit"
-              className="text-sm text-blue hover:underline"
-            >
-              Mark all read
-            </button>
-          </form>
-        )}
+        <div className="flex items-center gap-4">
+          {unreadCount > 0 && (
+            <form action={markAllNotificationsRead}>
+              <button
+                type="submit"
+                className="text-sm text-blue hover:underline"
+              >
+                Mark all read
+              </button>
+            </form>
+          )}
+          <Link href="/settings/notifications" className="text-sm text-blue hover:underline">
+            Settings
+          </Link>
+        </div>
       </div>
 
       <ul className="mt-8 divide-y divide-hair border-t border-hair">

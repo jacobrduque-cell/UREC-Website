@@ -48,23 +48,43 @@ export async function notifyUsers(
 ) {
   if (userIds.length === 0) return;
   const admin = createAdminClient();
-  await admin.from("notifications").insert(
-    userIds.map((userId) => ({
-      user_id: userId,
-      type: notification.type,
-      title: notification.title,
-      body: notification.body ?? null,
-      related_entity_type: notification.relatedEntityType ?? null,
-      related_entity_id: notification.relatedEntityId ?? null,
-    })),
+
+  // Per-user channel for THIS notification type. No row = "email" (the
+  // default), so members only ever reduce noise, never miss by accident.
+  const { data: prefRows } = await admin
+    .from("notification_prefs")
+    .select("user_id, channel")
+    .eq("type", notification.type)
+    .in("user_id", userIds);
+  const channelFor = new Map(
+    ((prefRows ?? []) as { user_id: string; channel: string }[]).map((p) => [p.user_id, p.channel]),
   );
+  const channel = (uid: string) => channelFor.get(uid) ?? "email";
+
+  // In-app row for everyone who hasn't turned this type off entirely.
+  const inAppIds = userIds.filter((id) => channel(id) !== "off");
+  if (inAppIds.length > 0) {
+    await admin.from("notifications").insert(
+      inAppIds.map((userId) => ({
+        user_id: userId,
+        type: notification.type,
+        title: notification.title,
+        body: notification.body ?? null,
+        related_entity_type: notification.relatedEntityType ?? null,
+        related_entity_id: notification.relatedEntityId ?? null,
+      })),
+    );
+  }
 
   if (!emailEnabled()) return;
+  // Email only those whose channel is "email".
+  const emailIds = userIds.filter((id) => channel(id) === "email");
+  if (emailIds.length === 0) return;
   try {
     const { data: recipients } = await admin
       .from("users")
       .select("email")
-      .in("id", userIds);
+      .in("id", emailIds);
     const html = notificationHtml({
       title: notification.title,
       body: notification.body,
