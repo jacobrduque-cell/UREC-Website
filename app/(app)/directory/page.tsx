@@ -90,6 +90,12 @@ export default async function DirectoryPage({
         {isExec && (
           <div className="flex gap-3">
             <Link
+              href="/directory/progress"
+              className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
+            >
+              Progress
+            </Link>
+            <Link
               href="/directory/sections"
               className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
             >
