@@ -6,7 +6,7 @@
 
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { freshDb, tryAsUser } from "./harness.mjs";
+import { freshDb, tryAsUser, asUser } from "./harness.mjs";
 
 const EXEC = "00000000-0000-0000-0000-0000000000e1";
 const STU = "00000000-0000-0000-0000-0000000000a1"; // enrolled analyst
@@ -120,6 +120,19 @@ before(async () => {
     `insert into public.grades (submission_id, points_earned, graded_by)
        values ('66666666-0000-0000-0000-000000000002', 45, $1)`,
     [EXEC],
+  );
+
+  // A locked assignment (window already closed) with a STU submission on
+  // it, for the submission tamper guard (20260717002300).
+  await db.query(
+    `insert into public.assignments (id, course_id, title, submission_type, points_possible, published, lock_at)
+       values ('55555555-0000-0000-0000-000000000003',$1,'Closed HW','text',20,true, now() - interval '1 day')`,
+    [course],
+  );
+  await db.query(
+    `insert into public.submissions (id, assignment_id, user_id, submitted_at)
+       values ('66666666-0000-0000-0000-000000000003','55555555-0000-0000-0000-000000000003',$1, now() - interval '2 day')`,
+    [STU],
   );
 });
 
@@ -302,4 +315,99 @@ test("signup trigger redeems a pending enrollment into a real one", async () => 
   assert.equal(enr.rows[0].n, 1, "pending enrollment should convert on signup (case-insensitive)");
   const pend = await db.query(`select count(*)::int n from public.pending_enrollments where lower(email)='newbie@berkeley.edu'`);
   assert.equal(pend.rows[0].n, 0, "pending row should be cleared after redemption");
+});
+
+// ---- Submission tamper guard (fix: 20260717002300) ----
+test("student CANNOT re-target their submission to a different assignment", async () => {
+  const r = await tryAsUser(
+    db,
+    STU,
+    `update public.submissions set assignment_id='55555555-0000-0000-0000-000000000002'
+       where id='66666666-0000-0000-0000-000000000001'`,
+  );
+  assert.equal(r.ok, false, "re-targeting assignment_id must be rejected");
+});
+
+test("student's backdated submitted_at is overwritten to now()", async () => {
+  const stored = await asUser(db, STU, async (c) => {
+    await c.query(
+      `update public.submissions set submitted_at='2020-01-01T00:00:00Z'
+         where id='66666666-0000-0000-0000-000000000001'`,
+    );
+    const { rows } = await c.query(
+      `select submitted_at from public.submissions where id='66666666-0000-0000-0000-000000000001'`,
+    );
+    return rows[0].submitted_at;
+  });
+  assert.ok(
+    new Date(stored).getUTCFullYear() >= 2026,
+    `submitted_at should be re-stamped to now(), got ${stored}`,
+  );
+});
+
+test("student CANNOT edit a submission after the window closed", async () => {
+  const r = await tryAsUser(
+    db,
+    STU,
+    `update public.submissions set body_text='late edit'
+       where id='66666666-0000-0000-0000-000000000003'`,
+  );
+  assert.equal(r.ok, false, "update after lock_at must be rejected");
+});
+
+test("exec CAN update a submission even after the window closed", async () => {
+  const r = await tryAsUser(
+    db,
+    EXEC,
+    `update public.submissions set body_text='exec fix'
+       where id='66666666-0000-0000-0000-000000000003'`,
+  );
+  assert.equal(r.ok, true, "exec is exempt from the tamper guard");
+});
+
+// ---- submission_files file ownership (fix: 20260717002400) ----
+test("student CANNOT attach a file they didn't upload to their submission", async () => {
+  // 77777777-...0002 is the exec-uploaded syllabus. Linking it to STU's
+  // own submission would leak its metadata via files_select_submission_participant.
+  const r = await tryAsUser(
+    db,
+    STU,
+    `insert into public.submission_files (submission_id, file_id)
+       values ('66666666-0000-0000-0000-000000000001','77777777-0000-0000-0000-000000000002')`,
+  );
+  assert.equal(r.ok, false, "attaching another user's file must be rejected");
+});
+
+// ---- files insert for own uploads (fix: 20260717002500) ----
+test("enrolled student CAN insert their own unpublished submission file", async () => {
+  const r = await tryAsUser(
+    db,
+    STU,
+    `insert into public.files (course_id, uploaded_by, storage_path, filename, published)
+       values ($1,$2,'a/b/own.pdf','own.pdf',false)`,
+    [course, STU],
+  );
+  assert.equal(r.ok, true, "students must be able to upload file submissions");
+});
+
+test("student CANNOT insert a PUBLISHED file (repository stays exec-only)", async () => {
+  const r = await tryAsUser(
+    db,
+    STU,
+    `insert into public.files (course_id, uploaded_by, storage_path, filename, published)
+       values ($1,$2,'a/b/pub.pdf','pub.pdf',true)`,
+    [course, STU],
+  );
+  assert.equal(r.ok, false, "students must not publish to the Files repository");
+});
+
+test("student CANNOT insert a file attributed to someone else", async () => {
+  const r = await tryAsUser(
+    db,
+    STU,
+    `insert into public.files (course_id, uploaded_by, storage_path, filename, published)
+       values ($1,$2,'a/b/forge.pdf','forge.pdf',false)`,
+    [course, OTHER],
+  );
+  assert.equal(r.ok, false, "uploaded_by must be the caller");
 });
