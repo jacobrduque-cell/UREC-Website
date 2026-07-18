@@ -1,5 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { emailEnabled, sendEmails, notificationHtml } from "@/lib/email";
 
 type NotificationType =
   | "new_announcement"
@@ -7,12 +8,33 @@ type NotificationType =
   | "assignment_graded"
   | "assignment_due_soon";
 
+// Best-effort deep link per notification type so the email's button lands
+// somewhere useful rather than always the dashboard.
+function linkForType(type: NotificationType): string {
+  switch (type) {
+    case "new_announcement":
+      return "/announcements";
+    case "new_assignment":
+    case "assignment_due_soon":
+      return "/assignments";
+    case "assignment_graded":
+      return "/grades";
+    default:
+      return "/dashboard";
+  }
+}
+
 /**
  * Notifications are written with the admin client (service role),
  * bypassing RLS on purpose — a notification is always created on
  * someone else's behalf (the poster isn't the recipient), and
  * `public.notifications` has no client-side insert policy at all for
  * exactly that reason (see 20260717000100_rls_policies.sql).
+ *
+ * After recording the in-app rows, it also emails each recipient — but
+ * only when RESEND_API_KEY is configured; otherwise email silently
+ * no-ops so the platform runs fine without a vendor. Email failures are
+ * caught and never break the action that triggered the notification.
  */
 export async function notifyUsers(
   userIds: string[],
@@ -36,6 +58,27 @@ export async function notifyUsers(
       related_entity_id: notification.relatedEntityId ?? null,
     })),
   );
+
+  if (!emailEnabled()) return;
+  try {
+    const { data: recipients } = await admin
+      .from("users")
+      .select("email")
+      .in("id", userIds);
+    const html = notificationHtml({
+      title: notification.title,
+      body: notification.body,
+      linkPath: linkForType(notification.type),
+    });
+    await sendEmails(
+      (recipients ?? [])
+        .map((r) => r.email as string)
+        .filter(Boolean)
+        .map((email) => ({ to: email, subject: notification.title, html })),
+    );
+  } catch (e) {
+    console.error("notifyUsers email step failed:", e);
+  }
 }
 
 /**
