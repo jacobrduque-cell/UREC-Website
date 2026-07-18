@@ -277,6 +277,12 @@ export async function submitAssignment(assignmentId: string, formData: FormData)
         filename: file.name,
         size_bytes: file.size,
         mime_type: file.type,
+        // A submission file is private to the submitter/team/graders —
+        // NOT a published course-repository file. Without this it would
+        // default to published=true and every enrolled member could
+        // enumerate everyone's submission filenames via the files table
+        // (and it would show up in the Files browser).
+        published: false,
       })
       .select("id")
       .single();

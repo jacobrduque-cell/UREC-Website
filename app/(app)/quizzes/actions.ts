@@ -108,13 +108,31 @@ export async function submitQuiz(quizId: string, formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  // Gate visibility through RLS with the USER's client: a member can
+  // only read a quiz that's published and in a course they're enrolled
+  // in (or exec). If this returns nothing, they aren't allowed to take
+  // it — stop before any admin-client writes bypass RLS.
+  const { data: quiz } = await supabase
+    .from("quizzes")
+    .select("id, published")
+    .eq("id", quizId)
+    .maybeSingle();
+  if (!quiz || !quiz.published) {
+    throw new Error("This quiz isn't available.");
+  }
+
+  // Every write below uses the admin client so students never touch the
+  // quiz_submissions/quiz_responses tables directly. The score column is
+  // computed here from the authoritative answer keys and can't be set by
+  // the client — RLS on those tables is exec-only (see migration
+  // 20260717001700), so the only way in is through this action.
   const admin = createAdminClient();
   const { data: questions } = await admin
     .from("quiz_questions")
     .select("id, question_type, points, quiz_answers(id, is_correct)")
     .eq("quiz_id", quizId);
 
-  const { data: submission, error: sErr } = await supabase
+  const { data: submission, error: sErr } = await admin
     .from("quiz_submissions")
     .upsert(
       { quiz_id: quizId, user_id: user.id, submitted_at: new Date().toISOString() },
