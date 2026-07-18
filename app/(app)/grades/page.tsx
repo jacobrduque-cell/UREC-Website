@@ -8,6 +8,7 @@ type AssignmentRow = {
   id: string;
   title: string;
   points_possible: number;
+  assignment_group_id: string | null;
   assignment_group: { name: string; weight_pct: number; position: number } | null;
 };
 type SubmissionRow = { assignment_id: string; grades: Grade | Grade[] | null };
@@ -34,7 +35,7 @@ export default async function GradesPage() {
     ? await supabase
         .from("assignments")
         .select(
-          `id, title, points_possible,
+          `id, title, points_possible, assignment_group_id,
              assignment_group:assignment_groups(name, weight_pct, position)`,
         )
         .eq("course_id", course.id)
@@ -88,8 +89,12 @@ export default async function GradesPage() {
     const name = a.assignment_group?.name ?? "Ungrouped";
     const weight = a.assignment_group?.weight_pct ?? 0;
     const position = a.assignment_group?.position ?? 99;
-    if (!categories.has(name)) {
-      categories.set(name, {
+    // Key by group IDENTITY, not name — two groups can share a name, and
+    // the exec gradebook keys by id, so both views must too or their
+    // totals diverge.
+    const key = a.assignment_group_id ?? "ungrouped";
+    if (!categories.has(key)) {
+      categories.set(key, {
         name,
         weight,
         position,
@@ -100,7 +105,7 @@ export default async function GradesPage() {
     }
     const grade = gradeByAssignment.get(a.id);
     if (grade != null) {
-      const cat = categories.get(name)!;
+      const cat = categories.get(key)!;
       cat.earned += grade;
       cat.possible += a.points_possible;
       cat.hasGraded = true;

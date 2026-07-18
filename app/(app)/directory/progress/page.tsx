@@ -80,9 +80,8 @@ export default async function ProgressPage() {
   }
   const totalMeetings = meetingsTaken.size;
 
-  // Assignments: a submission (own or via the user's group) counts for
-  // each member; graded is a strict subset.
-  const submitted = new Map<string, Set<string>>();
+  // Assignments: a graded submission (own or via the user's group) counts
+  // for each member.
   const graded = new Map<string, Set<string>>();
   const add = (m: Map<string, Set<string>>, uid: string, aid: string) => {
     if (!m.has(uid)) m.set(uid, new Set());
@@ -94,12 +93,9 @@ export default async function ProgressPage() {
     group_id: string | null;
     grades: { points_earned: number } | { points_earned: number }[] | null;
   }[]) {
+    if (oneOrFirst(s.grades)?.points_earned == null) continue;
     const recipients = s.user_id ? [s.user_id] : (s.group_id ? groupMembers.get(s.group_id) ?? [] : []);
-    const isGraded = oneOrFirst(s.grades)?.points_earned != null;
-    for (const uid of recipients) {
-      add(submitted, uid, s.assignment_id);
-      if (isGraded) add(graded, uid, s.assignment_id);
-    }
+    for (const uid of recipients) add(graded, uid, s.assignment_id);
   }
 
   // Quizzes: count distinct quizzes the user actually submitted.
