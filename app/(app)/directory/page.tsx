@@ -7,7 +7,15 @@ type EnrollmentRow = {
   id: string;
   role: { name: string } | null;
   section: { id: string; name: string } | null;
-  user: { id: string; email: string; full_name: string | null } | null;
+  user: {
+    id: string;
+    email: string;
+    full_name: string | null;
+    pronouns: string | null;
+    major: string | null;
+    grad_year: number | null;
+    linkedin_url: string | null;
+  } | null;
 };
 type PendingRow = {
   id: string;
@@ -40,7 +48,7 @@ export default async function DirectoryPage({
             .from("enrollments")
             .select(
               `id, role:roles(name), section:course_sections(id, name),
-             user:users(id, email, full_name)`,
+             user:users(id, email, full_name, pronouns, major, grad_year, linkedin_url)`,
             )
             .eq("course_id", course.id)
         : Promise.resolve({ data: [], error: null }),
@@ -87,28 +95,36 @@ export default async function DirectoryPage({
             member{allRows.length === 1 ? "" : "s"}
           </p>
         </div>
-        {isExec && (
-          <div className="flex gap-3">
-            <Link
-              href="/directory/progress"
-              className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
-            >
-              Progress
-            </Link>
-            <Link
-              href="/directory/sections"
-              className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
-            >
-              Manage Sections
-            </Link>
-            <Link
-              href="/directory/groups"
-              className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
-            >
-              Manage Groups
-            </Link>
-          </div>
-        )}
+        <div className="flex flex-wrap justify-end gap-3">
+          <Link
+            href="/settings/profile"
+            className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
+          >
+            Edit my profile
+          </Link>
+          {isExec && (
+            <>
+              <Link
+                href="/directory/progress"
+                className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
+              >
+                Progress
+              </Link>
+              <Link
+                href="/directory/sections"
+                className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
+              >
+                Manage Sections
+              </Link>
+              <Link
+                href="/directory/groups"
+                className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
+              >
+                Manage Groups
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
       {isExec && course && (
@@ -215,8 +231,31 @@ export default async function DirectoryPage({
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-text">
                   {r.user!.full_name ?? r.user!.email}
+                  {r.user!.pronouns && (
+                    <span className="ml-1.5 text-xs font-normal text-muted">({r.user!.pronouns})</span>
+                  )}
                 </p>
-                <p className="truncate text-xs text-muted">{r.user!.email}</p>
+                <p className="truncate text-xs text-muted">
+                  {[
+                    r.user!.major,
+                    r.user!.grad_year ? `'${String(r.user!.grad_year).slice(2)}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || r.user!.email}
+                </p>
+                {(r.user!.major || r.user!.grad_year) && (
+                  <p className="truncate text-xs text-muted">{r.user!.email}</p>
+                )}
+                {r.user!.linkedin_url && (
+                  <a
+                    href={r.user!.linkedin_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue hover:underline"
+                  >
+                    LinkedIn ↗
+                  </a>
+                )}
               </div>
               <div className="flex flex-shrink-0 items-center gap-3">
                 {r.section && (
