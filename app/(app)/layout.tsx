@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getCurrentProfile, getIsExec } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { LayoutGrid, Bell, Mail, Settings } from "lucide-react";
 import { CourseSidebar } from "./course-sidebar";
 import { CourseTopBar } from "./course-topbar";
@@ -34,7 +35,7 @@ function RailLink({
       {children}
       <span className="text-center">{label}</span>
       {badge != null && badge > 0 && (
-        <span className="absolute right-4 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[10px] font-semibold text-white">
+        <span className="absolute right-4 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[10px] font-semibold text-navy-deep">
           {badge}
         </span>
       )}
@@ -87,9 +88,18 @@ export default async function AppLayout({
       <nav className="flex w-[76px] flex-shrink-0 flex-col items-center bg-navy pb-3 text-white">
         <Link
           href="/dashboard"
-          className="flex h-14 w-full items-center justify-center bg-navy-deep font-ui text-sm font-bold tracking-tight text-white"
+          title="UREC — Dashboard"
+          className="flex h-14 w-full items-center justify-center bg-navy-deep"
         >
-          UREC
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white p-1 shadow-sm">
+            <Image
+              src="/urec-logo.png"
+              alt="UREC"
+              width={30}
+              height={30}
+              priority
+            />
+          </span>
         </Link>
         <div className="mt-1 flex flex-col items-center self-stretch">
           <RailLink href="/dashboard" label="Dashboard">

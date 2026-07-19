@@ -11,22 +11,31 @@
  * separate, fully self-contained product with its own inline styles
  * and is untouched by this file.
  */
+/*
+ * UREC brand palette — sampled from the club's own diamond logo
+ * (public/urec-logo.png) and grounded in UC Berkeley's blue & gold.
+ * Token NAMES are unchanged so every page keeps working; only the values
+ * shifted from Canvas's slate to UREC's blues. Semantic colors (pos/neg,
+ * and the amber late/warning used inline) are left as-is — a legible
+ * status must never be "on brand."
+ */
 :root {
-  --navy: #334451; /* Canvas's global-nav / oxford slate, not a blue anymore */
-  --navy-deep: #273540; /* Canvas ic-color-dark (licorice) */
-  --navy-darker: #1c262d;
-  --blue: #2B7ABC; /* Canvas ic-brand-primary */
-  --sky: #0E68B3; /* Canvas ic-link-color */
-  --pale: #E0EBF5; /* Canvas ic-bg-light-primary */
-  --gold: #F06E26; /* Canvas's alert/orange, closest to a warm accent it has */
-  --paper: #F2F4F4; /* Canvas ic-body-background-color */
-  --paper-warm: #F2F4F4;
-  --ink: #273540;
-  --text: #273540; /* Canvas ic-brand-font-color-dark */
-  --muted: #6A7883; /* Canvas ic-color-medium / heather */
-  --hair: #E8EAEC; /* Canvas ic-border-light / tiara */
-  --pos: #03893D; /* Canvas ic-color-success / shamrock */
-  --neg: #E62429; /* Canvas ic-color-danger / crimson */
+  --navy: #0E3C6E; /* global nav rail — UREC navy blue */
+  --navy-deep: #0A2F57; /* headings, darkest surfaces */
+  --navy-darker: #08243F; /* rail masthead */
+  --blue: #1663AE; /* primary — the signature diamond blue */
+  --sky: #146CB2; /* links, titles, interactive text */
+  --cyan: #2E9BD6; /* bright accent from the logo towers */
+  --pale: #E6F1FB; /* light blue tint — chips, hovers */
+  --gold: #E8A400; /* California-gold accent — pinned, alert badge */
+  --paper: #F1F5F9; /* app background — a chosen, blue-biased grey */
+  --paper-warm: #EDF3FA;
+  --ink: #13202B;
+  --text: #13202B; /* body — a blue-black, not pure black */
+  --muted: #5C7183; /* secondary text, blue-leaning */
+  --hair: #E2E8F0; /* hairline borders */
+  --pos: #03893D; /* success — kept */
+  --neg: #E62429; /* danger — kept */
 
   --background: var(--paper);
   --foreground: var(--text);
@@ -38,6 +47,7 @@
   --color-navy-darker: var(--navy-darker);
   --color-blue: var(--blue);
   --color-sky: var(--sky);
+  --color-cyan: var(--cyan);
   --color-pale: var(--pale);
   --color-gold: var(--gold);
   --color-paper: var(--paper);
