@@ -2,26 +2,21 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile, getMyGroupIds, submissionOwnerFilter, getIsExec } from "@/lib/data/queries";
 import { relativeTime } from "@/lib/relative-time";
 import { redirect } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { Megaphone, ClipboardList, MessagesSquare, Folder, BookMarked } from "lucide-react";
+import { courseColor } from "@/lib/course-color";
 
 type CourseCard = {
   id: string;
   name: string;
   code: string | null;
+  cover_image_url: string | null;
   term: { name: string } | null;
 };
 type DueRow = { id: string; title: string; due_at: string; points_possible: number };
 type EventRow = { id: string; title: string; starts_at: string };
 type FeedbackRow = { points_earned: number; graded_at: string; submission: { assignment: { title: string; points_possible: number } | null } | null };
-
-// Deterministic bCourses-style card header color from the course id.
-const CARD_COLORS = ["#1B3D7B", "#2B7ABC", "#0E6E52", "#8A2E63", "#B4531A", "#334451", "#5B3A8A"];
-function colorFor(id: string) {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return CARD_COLORS[h % CARD_COLORS.length];
-}
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -45,7 +40,7 @@ export default async function DashboardPage() {
     await Promise.all([
       supabase
         .from("courses")
-        .select("id, name, code, term:terms(name, starts_on)")
+        .select("id, name, code, cover_image_url, term:terms(name, starts_on)")
         .order("created_at", { ascending: false }),
       supabase
         .from("assignments")
@@ -184,7 +179,31 @@ export default async function DashboardPage() {
             {courses.map((c) => (
               <div key={c.id} className="overflow-hidden rounded-lg border border-hair bg-white shadow-sm">
                 <Link href={`/enter/${c.id}?to=/home`} aria-label={c.name}>
-                  <div className="h-28" style={{ backgroundColor: colorFor(c.id) }} />
+                  <div
+                    className="relative h-28 overflow-hidden"
+                    style={{ backgroundColor: courseColor(c.id) }}
+                  >
+                    {c.cover_image_url && (
+                      <>
+                        <Image
+                          src={c.cover_image_url}
+                          alt=""
+                          fill
+                          sizes="(max-width: 768px) 100vw, 360px"
+                          className="object-cover"
+                        />
+                        {/* the course color as a translucent film over the image */}
+                        <span
+                          className="absolute inset-0"
+                          style={{
+                            backgroundColor: courseColor(c.id),
+                            opacity: 0.55,
+                            mixBlendMode: "multiply",
+                          }}
+                        />
+                      </>
+                    )}
+                  </div>
                 </Link>
                 <div className="p-4">
                   <Link href={`/enter/${c.id}?to=/home`} className="font-ui text-sm font-bold text-sky hover:underline">

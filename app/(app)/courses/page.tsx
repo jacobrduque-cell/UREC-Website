@@ -1,10 +1,24 @@
 import { createClient } from "@/lib/supabase/server";
 import { getIsExec } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
-import { createTermAndCourse, setCurrentTerm, toggleCoursePublished } from "./actions";
+import {
+  clearCourseCover,
+  createTermAndCourse,
+  setCourseCover,
+  setCurrentTerm,
+  toggleCoursePublished,
+} from "./actions";
 import { CourseForm } from "./course-form";
+import { CoverUploader } from "./cover-uploader";
+import { courseColor } from "@/lib/course-color";
 
-type CourseRow = { id: string; name: string; code: string | null; published: boolean };
+type CourseRow = {
+  id: string;
+  name: string;
+  code: string | null;
+  published: boolean;
+  cover_image_url: string | null;
+};
 type TermRow = { id: string; name: string; starts_on: string; ends_on: string; is_current: boolean; courses: CourseRow[] };
 
 export default async function CoursesPage() {
@@ -14,7 +28,9 @@ export default async function CoursesPage() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("terms")
-    .select("id, name, starts_on, ends_on, is_current, courses(id, name, code, published)")
+    .select(
+      "id, name, starts_on, ends_on, is_current, courses(id, name, code, published, cover_image_url)",
+    )
     .order("starts_on", { ascending: false });
 
   const terms = (data ?? []) as unknown as TermRow[];
@@ -66,23 +82,31 @@ export default async function CoursesPage() {
 
             <ul className="mt-3 flex flex-col gap-2 border-t border-hair pt-3">
               {t.courses.map((c) => (
-                <li key={c.id} className="flex items-center justify-between gap-4">
-                  <span className="text-sm text-text">
-                    {c.name}
-                    {c.code && <span className="ml-1.5 text-xs text-muted">({c.code})</span>}
-                  </span>
-                  <form action={toggleCoursePublished.bind(null, c.id, c.published)}>
-                    <button
-                      type="submit"
-                      className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                        c.published
-                          ? "border-pos text-pos hover:bg-pos/10"
-                          : "border-hair text-muted hover:bg-hair"
-                      }`}
-                    >
-                      {c.published ? "Published" : "Draft — Publish"}
-                    </button>
-                  </form>
+                <li key={c.id}>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm text-text">
+                      {c.name}
+                      {c.code && <span className="ml-1.5 text-xs text-muted">({c.code})</span>}
+                    </span>
+                    <form action={toggleCoursePublished.bind(null, c.id, c.published)}>
+                      <button
+                        type="submit"
+                        className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                          c.published
+                            ? "border-pos text-pos hover:bg-pos/10"
+                            : "border-hair text-muted hover:bg-hair"
+                        }`}
+                      >
+                        {c.published ? "Published" : "Draft — Publish"}
+                      </button>
+                    </form>
+                  </div>
+                  <CoverUploader
+                    action={setCourseCover.bind(null, c.id)}
+                    clearAction={clearCourseCover.bind(null, c.id)}
+                    currentUrl={c.cover_image_url}
+                    color={courseColor(c.id)}
+                  />
                 </li>
               ))}
               {t.courses.length === 0 && (

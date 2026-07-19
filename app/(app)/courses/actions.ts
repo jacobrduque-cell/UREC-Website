@@ -82,3 +82,62 @@ export async function setCurrentTerm(termId: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/courses");
 }
+
+const COVER_MAX_BYTES = 5 * 1024 * 1024; // matches the content-images bucket cap
+const COVER_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+
+// Upload a course cover into the public content-images bucket (under the
+// exec's own folder, per that bucket's insert policy) and store its URL
+// on the course. RLS re-enforces exec on the courses update. The card
+// then lays the course color over it as a translucent film.
+export async function setCourseCover(
+  courseId: string,
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { error: "Your session expired — refresh and sign in again." };
+
+    const file = formData.get("cover") as File | null;
+    if (!file || file.size === 0) return { error: "Choose an image to upload." };
+    if (!COVER_TYPES.has(file.type)) return { error: "Use a PNG, JPEG, GIF, or WebP image." };
+    if (file.size > COVER_MAX_BYTES) return { error: "Image is too large (max 5 MB)." };
+
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60);
+    const path = `${user.id}/covers/${courseId}-${Date.now()}-${safe}`;
+    const { error: upErr } = await supabase.storage
+      .from("content-images")
+      .upload(path, file, { contentType: file.type });
+    if (upErr) return { error: upErr.message };
+
+    const { data: pub } = supabase.storage.from("content-images").getPublicUrl(path);
+    const { error } = await supabase
+      .from("courses")
+      .update({ cover_image_url: pub.publicUrl })
+      .eq("id", courseId);
+    if (error) return { error: error.message };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't set the cover. Try again." };
+  }
+
+  revalidatePath("/courses");
+  revalidatePath("/dashboard");
+  revalidatePath("/home");
+  return {};
+}
+
+export async function clearCourseCover(courseId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("courses")
+    .update({ cover_image_url: null })
+    .eq("id", courseId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/courses");
+  revalidatePath("/dashboard");
+  revalidatePath("/home");
+}

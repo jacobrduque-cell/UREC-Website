@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  images: {
+    // Course cover images are served from the public content-images
+    // bucket on Supabase storage.
+    remotePatterns: [{ protocol: "https", hostname: "**.supabase.co" }],
+  },
   experimental: {
     serverActions: {
       // File submissions and course-file uploads go through server
