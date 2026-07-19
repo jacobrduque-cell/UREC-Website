@@ -266,6 +266,57 @@ export async function deleteRubric(rubricId: string) {
   redirect("/assignments/rubrics");
 }
 
+// Duplicate an assignment into the same course as an unpublished draft
+// titled "… (copy)", carrying over its rubric link. RLS re-enforces exec.
+// The single biggest authoring-speed win: exec build ~8 near-identical
+// weekly assignments a term, so clone-and-tweak beats rebuilding by hand.
+export async function duplicateAssignment(assignmentId: string) {
+  const supabase = await createClient();
+
+  const { data: src, error: readErr } = await supabase
+    .from("assignments")
+    .select(
+      "course_id, assignment_group_id, title, description, points_possible, due_at, unlock_at, lock_at, submission_type, accepted_file_types, allow_group_submission",
+    )
+    .eq("id", assignmentId)
+    .single();
+  if (readErr || !src) throw new Error("Assignment not found.");
+
+  const { data: copy, error } = await supabase
+    .from("assignments")
+    .insert({
+      course_id: src.course_id,
+      assignment_group_id: src.assignment_group_id,
+      title: `${src.title} (copy)`,
+      description: src.description,
+      points_possible: src.points_possible,
+      due_at: src.due_at,
+      unlock_at: src.unlock_at,
+      lock_at: src.lock_at,
+      submission_type: src.submission_type,
+      accepted_file_types: src.accepted_file_types,
+      allow_group_submission: src.allow_group_submission,
+      published: false,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  const { data: links } = await supabase
+    .from("assignment_rubrics")
+    .select("rubric_id")
+    .eq("assignment_id", assignmentId);
+  if (links && links.length) {
+    const { error: lErr } = await supabase
+      .from("assignment_rubrics")
+      .insert(links.map((l) => ({ assignment_id: copy.id, rubric_id: l.rubric_id })));
+    if (lErr) throw new Error(lErr.message);
+  }
+
+  revalidatePath("/assignments");
+  redirect(`/assignments/${copy.id}/edit`);
+}
+
 export async function submitAssignment(assignmentId: string, formData: FormData) {
   const supabase = await createClient();
   const {

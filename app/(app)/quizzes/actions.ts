@@ -208,6 +208,140 @@ export async function deleteQuiz(quizId: string) {
   redirect("/quizzes");
 }
 
+// Duplicate a quiz — including every question, answer option, settings,
+// explanations, and numeric tolerances — into the same course as an
+// unpublished draft titled "… (copy)". RLS re-enforces exec. Lets exec
+// spin up a new quiz from a proven one instead of re-authoring it.
+export async function duplicateQuiz(quizId: string) {
+  const supabase = await createClient();
+
+  const { data: src, error: readErr } = await supabase
+    .from("quizzes")
+    .select("course_id, title, description, shuffle_questions, show_correct_after")
+    .eq("id", quizId)
+    .single();
+  if (readErr || !src) throw new Error("Quiz not found.");
+
+  const { data: copy, error } = await supabase
+    .from("quizzes")
+    .insert({
+      course_id: src.course_id,
+      title: `${src.title} (copy)`,
+      description: src.description,
+      shuffle_questions: src.shuffle_questions,
+      show_correct_after: src.show_correct_after,
+      published: false,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  const { data: questions } = await supabase
+    .from("quiz_questions")
+    .select("id, question_text, question_type, points, position, explanation")
+    .eq("quiz_id", quizId);
+  for (const q of questions ?? []) {
+    const { data: nq, error: qErr } = await supabase
+      .from("quiz_questions")
+      .insert({
+        quiz_id: copy.id,
+        question_text: q.question_text,
+        question_type: q.question_type,
+        points: q.points,
+        position: q.position,
+        explanation: q.explanation,
+      })
+      .select("id")
+      .single();
+    if (qErr) throw new Error(qErr.message);
+
+    const { data: answers } = await supabase
+      .from("quiz_answers")
+      .select("answer_text, is_correct, position, tolerance")
+      .eq("question_id", q.id);
+    if (answers && answers.length) {
+      const { error: aErr } = await supabase.from("quiz_answers").insert(
+        answers.map((a) => ({
+          question_id: nq.id,
+          answer_text: a.answer_text,
+          is_correct: a.is_correct,
+          position: a.position,
+          tolerance: a.tolerance,
+        })),
+      );
+      if (aErr) throw new Error(aErr.message);
+    }
+  }
+
+  revalidatePath("/quizzes");
+  redirect(`/quizzes/${copy.id}`);
+}
+
+// Questions are only editable before anyone has attempted the quiz —
+// deleting or reordering after attempts exist would invalidate recorded
+// scores. Both actions re-check attempts server-side (the UI also hides
+// the controls once attempts exist). RLS re-enforces exec.
+async function assertQuizUnattempted(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  quizId: string,
+) {
+  const { count } = await supabase
+    .from("quiz_submissions")
+    .select("id", { count: "exact", head: true })
+    .eq("quiz_id", quizId);
+  if ((count ?? 0) > 0) {
+    throw new Error("Students have already taken this quiz — its questions are locked.");
+  }
+}
+
+export async function deleteQuestion(quizId: string, questionId: string) {
+  const supabase = await createClient();
+  await assertQuizUnattempted(supabase, quizId);
+
+  const { error } = await supabase.from("quiz_questions").delete().eq("id", questionId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/quizzes/${quizId}`);
+}
+
+export async function moveQuestion(
+  quizId: string,
+  questionId: string,
+  direction: "up" | "down",
+) {
+  const supabase = await createClient();
+  await assertQuizUnattempted(supabase, quizId);
+
+  const { data: questions } = await supabase
+    .from("quiz_questions")
+    .select("id, position")
+    .eq("quiz_id", quizId)
+    .order("position", { ascending: true });
+  const list = (questions ?? []) as { id: string; position: number }[];
+
+  const idx = list.findIndex((q) => q.id === questionId);
+  if (idx === -1) return;
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= list.length) return; // already at the edge
+
+  const a = list[idx];
+  const b = list[swapIdx];
+  // Swap their positions. (Positions are unique per quiz, set sequentially
+  // on insert, so a straight swap is enough.)
+  const { error: e1 } = await supabase
+    .from("quiz_questions")
+    .update({ position: b.position })
+    .eq("id", a.id);
+  if (e1) throw new Error(e1.message);
+  const { error: e2 } = await supabase
+    .from("quiz_questions")
+    .update({ position: a.position })
+    .eq("id", b.id);
+  if (e2) throw new Error(e2.message);
+
+  revalidatePath(`/quizzes/${quizId}`);
+}
+
 /**
  * Student submits a quiz attempt. Grading uses the admin client so the
  * authoritative is_correct flags are read server-side and never trusted
@@ -338,9 +472,10 @@ export async function gradeQuizResponses(
     const q = oneOrFirst(r.question) as { points: number; question_type: string } | undefined;
     const pts = Number(q?.points ?? 0);
     const type = q?.question_type;
-    if (type === "multiple_choice" || type === "true_false") {
-      if (r.is_correct) score += pts;
-    } else {
+    if (type === "short_answer" || type === "essay") {
+      // The only manually-graded types — the Submissions form renders an
+      // `award_<id>` input only for these. Everything else is objective
+      // and was already auto-graded on submit.
       const raw = Number(formData.get(`award_${r.id}`));
       const awarded = Number.isNaN(raw) ? 0 : Math.min(Math.max(raw, 0), pts);
       const { error } = await supabase
@@ -349,6 +484,12 @@ export async function gradeQuizResponses(
         .eq("id", r.id);
       if (error) throw new Error(error.message);
       score += awarded;
+    } else {
+      // Auto-graded objective types (multiple_choice, true_false,
+      // numeric, multiple_answer) keep the is_correct verdict computed at
+      // submit time. Re-deriving these from a form input that isn't
+      // rendered would silently zero correct answers.
+      if (r.is_correct) score += pts;
     }
   }
 

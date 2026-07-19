@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCourseMemberIds, notifyUsers } from "@/lib/notifications";
+import { pacificWallClockToUtcISO } from "@/lib/timezone";
 import { NextResponse } from "next/server";
 
 /**
@@ -17,19 +18,32 @@ export async function GET(request: Request) {
 
   const admin = createAdminClient();
 
+  // "Tomorrow" must mean the Pacific calendar day, not the UTC one —
+  // due_at is stored as Pacific wall-clock in UTC, so a UTC day-boundary
+  // window would clip evening-Pacific deadlines (they roll into the next
+  // UTC date) and remind a day early or skip them. Compute tomorrow's
+  // Pacific date, then convert its 00:00 and 23:59 Pacific bounds to UTC.
   const now = new Date();
-  const windowStart = new Date(now);
-  windowStart.setUTCDate(windowStart.getUTCDate() + 1);
-  windowStart.setUTCHours(0, 0, 0, 0);
-  const windowEnd = new Date(windowStart);
-  windowEnd.setUTCHours(23, 59, 59, 999);
+  const pacificToday = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now); // "YYYY-MM-DD"
+  const [ty, tm, td] = pacificToday.split("-").map(Number);
+  const tomorrow = new Date(Date.UTC(ty, tm - 1, td + 1));
+  const tomorrowDate = `${tomorrow.getUTCFullYear()}-${String(
+    tomorrow.getUTCMonth() + 1,
+  ).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
+  const windowStart = pacificWallClockToUtcISO(`${tomorrowDate}T00:00`)!;
+  const windowEnd = pacificWallClockToUtcISO(`${tomorrowDate}T23:59`)!;
 
   const { data: dueSoon } = await admin
     .from("assignments")
     .select("id, title, course_id")
     .eq("published", true)
-    .gte("due_at", windowStart.toISOString())
-    .lte("due_at", windowEnd.toISOString());
+    .gte("due_at", windowStart)
+    .lte("due_at", windowEnd);
 
   let notified = 0;
 

@@ -17,6 +17,10 @@ function entityHref(type: string | null, id: string | null) {
   if (!type || !id) return null;
   if (type === "announcement") return `/announcements/${id}`;
   if (type === "assignment") return `/assignments/${id}`;
+  // A "new message" notification links to its conversation thread —
+  // without this it rendered as a dead, non-clickable row that could
+  // only ever be cleared via "Mark all read".
+  if (type === "conversation") return `/inbox/${id}`;
   return null;
 }
 

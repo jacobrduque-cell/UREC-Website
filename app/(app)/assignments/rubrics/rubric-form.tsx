@@ -5,7 +5,9 @@ import { SubmitButton, FormError } from "../../ui/form-controls";
 
 type FormState = { error?: string };
 
-const criterionRows = Array.from({ length: 6 });
+// Match the 10 rows createRubric reads from the form (it loops i < 10);
+// rendering only 6 silently capped execs at 6 criteria.
+const criterionRows = Array.from({ length: 10 });
 
 export function RubricForm({
   action,

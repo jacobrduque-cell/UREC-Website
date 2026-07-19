@@ -4,7 +4,7 @@ import { renderMarkdown } from "@/lib/markdown";
 import { SubmitButton, ConfirmSubmitButton } from "../../ui/form-controls";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { addSubmissionComment, deleteAssignment, submitAssignment } from "../actions";
+import { addSubmissionComment, deleteAssignment, duplicateAssignment, submitAssignment } from "../actions";
 
 type Grade = { points_earned: number };
 type Comment = {
@@ -257,6 +257,16 @@ export default async function AssignmentDetailPage({
               >
                 Edit
               </Link>
+            )}
+            {isExec && (
+              <form action={duplicateAssignment.bind(null, id)}>
+                <SubmitButton
+                  pendingText="Duplicating…"
+                  className="inline-block rounded-md border border-hair px-5 py-2 text-sm font-medium text-text transition-colors hover:bg-[#eef7ff]"
+                >
+                  Duplicate
+                </SubmitButton>
+              </form>
             )}
             {isExec && submissionCount === 0 && (
               <form action={deleteAssignment.bind(null, id)}>

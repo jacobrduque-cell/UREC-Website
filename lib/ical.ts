@@ -22,8 +22,34 @@ function toUtcStamp(iso: string): string {
   return new Date(iso).toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 }
 
+// The Pacific calendar date (YYYY-MM-DD) of an instant. Events are stored
+// as Pacific wall-clock converted to UTC, so an all-day event's DATE must
+// reflect the Pacific day — formatting the raw UTC instant rolls any
+// evening-Pacific event onto the next day for calendar subscribers.
+function pacificDate(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso)); // en-CA → "YYYY-MM-DD"
+}
+
 function toDateStamp(iso: string): string {
-  return new Date(iso).toISOString().slice(0, 10).replace(/-/g, "");
+  return pacificDate(iso).replace(/-/g, "");
+}
+
+// RFC 5545 all-day DTEND is EXCLUSIVE — the day after the last day —
+// otherwise multi-day all-day events drop their final day. Add one
+// calendar day to the Pacific end date. (Date.UTC at midnight is safe
+// from DST since we only do integer day arithmetic on the date parts.)
+function toDateStampExclusive(iso: string): string {
+  const [y, m, d] = pacificDate(iso).split("-").map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  const yy = next.getUTCFullYear();
+  const mm = String(next.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(next.getUTCDate()).padStart(2, "0");
+  return `${yy}${mm}${dd}`;
 }
 
 export function buildIcs(calendarName: string, events: IcalEvent[]): string {
@@ -44,7 +70,7 @@ export function buildIcs(calendarName: string, events: IcalEvent[]): string {
     if (event.all_day) {
       lines.push(`DTSTART;VALUE=DATE:${toDateStamp(event.starts_at)}`);
       if (event.ends_at) {
-        lines.push(`DTEND;VALUE=DATE:${toDateStamp(event.ends_at)}`);
+        lines.push(`DTEND;VALUE=DATE:${toDateStampExclusive(event.ends_at)}`);
       }
     } else {
       lines.push(`DTSTART:${toUtcStamp(event.starts_at)}`);

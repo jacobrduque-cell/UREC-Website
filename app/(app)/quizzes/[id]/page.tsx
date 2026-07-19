@@ -3,10 +3,19 @@ import { getIsExec } from "@/lib/data/queries";
 import { renderMarkdown } from "@/lib/markdown";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { addQuestion, deleteQuiz, submitQuiz, toggleQuizPublished, updateQuizSettings } from "../actions";
+import {
+  addQuestion,
+  deleteQuestion,
+  deleteQuiz,
+  duplicateQuiz,
+  moveQuestion,
+  submitQuiz,
+  toggleQuizPublished,
+  updateQuizSettings,
+} from "../actions";
 import { AddQuestionForm } from "../add-question-form";
 import { QuizSettingsForm } from "./quiz-settings-form";
-import { ConfirmSubmitButton } from "../../ui/form-controls";
+import { ConfirmSubmitButton, SubmitButton } from "../../ui/form-controls";
 
 type QuestionType =
   | "multiple_choice"
@@ -209,6 +218,14 @@ export default async function QuizDetailPage({
                 {quiz.published ? "Unpublish" : "Publish"}
               </button>
             </form>
+            <form action={duplicateQuiz.bind(null, id)}>
+              <SubmitButton
+                pendingText="Duplicating…"
+                className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
+              >
+                Duplicate
+              </SubmitButton>
+            </form>
             {attemptCount === 0 && (
               <form action={deleteQuiz.bind(null, id)}>
                 <ConfirmSubmitButton
@@ -276,6 +293,39 @@ export default async function QuizDetailPage({
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {attemptCount === 0 && (
+                    <div className="mt-3 flex items-center gap-2 border-t border-hair pt-3">
+                      <form action={moveQuestion.bind(null, id, q.id, "up")}>
+                        <SubmitButton
+                          pendingText="…"
+                          disabled={i === 0}
+                          title="Move up"
+                          className="rounded border border-hair px-2 py-1 text-xs text-muted transition-colors hover:bg-[#eef7ff]"
+                        >
+                          ↑
+                        </SubmitButton>
+                      </form>
+                      <form action={moveQuestion.bind(null, id, q.id, "down")}>
+                        <SubmitButton
+                          pendingText="…"
+                          disabled={i === questions.length - 1}
+                          title="Move down"
+                          className="rounded border border-hair px-2 py-1 text-xs text-muted transition-colors hover:bg-[#eef7ff]"
+                        >
+                          ↓
+                        </SubmitButton>
+                      </form>
+                      <form action={deleteQuestion.bind(null, id, q.id)} className="ml-auto">
+                        <ConfirmSubmitButton
+                          message="Delete this question? This can't be undone."
+                          pendingText="Deleting…"
+                          className="rounded border border-neg/40 px-2.5 py-1 text-xs font-medium text-neg transition-colors hover:bg-[#fdecea]"
+                        >
+                          Delete
+                        </ConfirmSubmitButton>
+                      </form>
+                    </div>
                   )}
                 </li>
               );

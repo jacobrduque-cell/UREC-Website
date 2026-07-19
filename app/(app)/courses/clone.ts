@@ -190,7 +190,7 @@ export async function cloneCourseContent(
 
     const { data: questions } = await db
       .from("quiz_questions")
-      .select("id, question_text, question_type, points, position")
+      .select("id, question_text, question_type, points, position, explanation")
       .eq("quiz_id", q.id);
     for (const qq of questions ?? []) {
       const newQid = await insertReturning("quiz_questions", {
@@ -199,10 +199,11 @@ export async function cloneCourseContent(
         question_type: qq.question_type,
         points: qq.points,
         position: qq.position,
+        explanation: qq.explanation,
       });
       const { data: answers } = await db
         .from("quiz_answers")
-        .select("answer_text, is_correct, position")
+        .select("answer_text, is_correct, position, tolerance")
         .eq("question_id", qq.id);
       if (answers && answers.length) {
         const { error } = await db.from("quiz_answers").insert(
@@ -211,6 +212,7 @@ export async function cloneCourseContent(
             answer_text: ans.answer_text,
             is_correct: ans.is_correct,
             position: ans.position,
+            tolerance: ans.tolerance,
           })),
         );
         if (error) throw new Error(`clone quiz_answers: ${error.message}`);
