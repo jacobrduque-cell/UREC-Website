@@ -74,33 +74,50 @@ export default async function QuizzesPage({
         </div>
       )}
 
-      <ul className="mt-8 divide-y divide-hair border-t border-hair">
-        {quizzes.map((q) => {
-          const totalPts = q.quiz_questions.reduce((s, x) => s + Number(x.points), 0);
-          return (
-            <li key={q.id} className="flex items-center justify-between gap-3 py-3.5">
-              <span className="flex items-center gap-2">
-                <span aria-hidden>❓</span>
-                <Link href={`/quizzes/${q.id}`} className="text-sm font-medium text-sky hover:underline">
-                  {q.title}
-                </Link>
-                {isExec && !q.published && (
-                  <span className="rounded-full border border-hair px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                    Draft
-                  </span>
-                )}
-              </span>
-              <span className="text-xs text-muted">
-                {q.quiz_questions.length} question{q.quiz_questions.length === 1 ? "" : "s"} &middot;{" "}
-                {totalPts} pts
-              </span>
-            </li>
-          );
-        })}
-        {quizzes.length === 0 && (
-          <li className="py-6 text-sm text-muted">No quizzes yet.</li>
-        )}
-      </ul>
+      {quizzes.length > 0 ? (
+        <ul className="mt-8 divide-y divide-hair border-t border-hair">
+          {quizzes.map((q) => {
+            const totalPts = q.quiz_questions.reduce((s, x) => s + Number(x.points), 0);
+            return (
+              <li key={q.id} className="flex items-center justify-between gap-3 py-3.5">
+                <span className="flex items-center gap-2">
+                  <span aria-hidden>❓</span>
+                  <Link href={`/quizzes/${q.id}`} className="text-sm font-medium text-sky hover:underline">
+                    {q.title}
+                  </Link>
+                  {isExec && !q.published && (
+                    <span className="rounded-full border border-hair px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      Draft
+                    </span>
+                  )}
+                </span>
+                <span className="text-xs text-muted">
+                  {q.quiz_questions.length} question{q.quiz_questions.length === 1 ? "" : "s"} &middot;{" "}
+                  {totalPts} pts
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <div className="mt-8 rounded-md border border-hair bg-white py-16 text-center">
+          <div aria-hidden className="text-4xl opacity-70">❓</div>
+          <p className="mt-3 text-base font-medium text-text">No quizzes yet</p>
+          <p className="mt-1 text-sm text-muted">
+            {isExec
+              ? "Build a quiz to check understanding before the next session."
+              : "Nothing here yet — check back soon."}
+          </p>
+          {isExec && (
+            <Link
+              href="/quizzes/new"
+              className="mt-5 inline-block rounded-md bg-blue px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
+            >
+              New Quiz
+            </Link>
+          )}
+        </div>
+      )}
     </div>
   );
 }

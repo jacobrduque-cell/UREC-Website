@@ -3,6 +3,7 @@
 import { useActionState, type ReactNode } from "react";
 import Link from "next/link";
 import { SubmitButton, FormError } from "../ui/form-controls";
+import { MarkdownField } from "../ui/markdown-field";
 
 type FormState = { error?: string };
 
@@ -49,13 +50,12 @@ export function WikiPageForm({
         >
           Content (Markdown)
         </label>
-        <textarea
-          id="body_markdown"
+        <MarkdownField
           name="body_markdown"
           rows={16}
-          defaultValue={existing?.body_markdown}
-          className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 font-mono text-sm text-text outline-none focus:border-blue"
+          defaultValue={existing?.body_markdown ?? ""}
           placeholder={bodyPlaceholder}
+          className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 font-mono text-sm text-text outline-none focus:border-blue"
         />
       </div>
 

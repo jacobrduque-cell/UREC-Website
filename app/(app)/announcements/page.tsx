@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
+import { relativeTime } from "@/lib/relative-time";
 import { SortSelect } from "../ui/sort-select";
 import Link from "next/link";
 
@@ -100,6 +101,25 @@ export default async function AnnouncementsPage({
         </div>
       )}
 
+      {announcements.length === 0 ? (
+        <div className="mt-8 rounded-md border border-hair bg-white py-16 text-center">
+          <div aria-hidden className="text-4xl opacity-70">📣</div>
+          <p className="mt-3 text-base font-medium text-text">No announcements yet</p>
+          <p className="mt-1 text-sm text-muted">
+            {isExec
+              ? "Post an announcement to keep the cohort in the loop."
+              : "Nothing here yet — check back soon."}
+          </p>
+          {isExec && (
+            <Link
+              href="/announcements/new"
+              className="mt-5 inline-block rounded-md bg-blue px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
+            >
+              Post Announcement
+            </Link>
+          )}
+        </div>
+      ) : (
       <ul className="mt-8 divide-y divide-hair border-t border-hair">
         {announcements.map((a) => {
           const isDraft = !a.published_at;
@@ -138,17 +158,16 @@ export default async function AnnouncementsPage({
                 {a.author?.full_name ?? a.author?.email ?? "Unknown"}
                 {a.published_at &&
                   ` · ${new Date(a.published_at).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles",  month: "short", day: "numeric" })}`}
+                {a.published_at && (
+                  <span className="text-muted/80"> · {relativeTime(a.published_at)}</span>
+                )}
               </p>
             </Link>
           </li>
           );
         })}
-        {announcements.length === 0 && (
-          <li className="py-6 text-sm text-muted">
-            No announcements yet.
-          </li>
-        )}
       </ul>
+      )}
     </div>
   );
 }

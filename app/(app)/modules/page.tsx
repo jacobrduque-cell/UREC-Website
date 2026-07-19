@@ -201,7 +201,15 @@ export default async function ModulesPage() {
           );
         })}
         {modules.length === 0 && (
-          <p className="text-sm text-muted">No modules yet.</p>
+          <div className="rounded-md border border-hair bg-white py-16 text-center">
+            <div aria-hidden className="text-4xl opacity-70">🗂️</div>
+            <p className="mt-3 text-base font-medium text-text">No modules yet</p>
+            <p className="mt-1 text-sm text-muted">
+              {isExec
+                ? "Group pages, assignments, and quizzes into a module using the form below."
+                : "Nothing here yet — check back soon."}
+            </p>
+          </div>
         )}
       </div>
 

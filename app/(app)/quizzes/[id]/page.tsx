@@ -16,6 +16,7 @@ import {
 import { AddQuestionForm } from "../add-question-form";
 import { QuizSettingsForm } from "./quiz-settings-form";
 import { ConfirmSubmitButton, SubmitButton } from "../../ui/form-controls";
+import { PreviewBanner } from "../../ui/preview-banner";
 
 type QuestionType =
   | "multiple_choice"
@@ -91,10 +92,13 @@ function formatResponse(q: Question, responseText: string | null | undefined): s
 
 export default async function QuizDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ preview?: string }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -102,6 +106,15 @@ export default async function QuizDetailPage({
   if (!user) redirect("/login");
 
   const isExec = await getIsExec();
+  // Canvas-style "Student View": an exec forces the quiz-taking view with
+  // ?preview=student. `showAsExec` gates the authoring UI and the answer
+  // key read (in preview we read the student options view, so the answer
+  // key never loads), and the take-quiz UI is rendered strictly read-only
+  // — submitQuiz is RLS-gated to enrolled non-exec users, so an exec can't
+  // actually submit.
+  const previewAsStudent = isExec && sp.preview === "student";
+  const showAsExec = isExec && !previewAsStudent;
+  const backHref = `/quizzes/${id}`;
 
   const { data: quiz } = await supabase
     .from("quizzes")
@@ -113,7 +126,7 @@ export default async function QuizDetailPage({
   // Exec-only: has anyone taken this quiz? Delete is offered only when no
   // attempts exist (deleting cascades them away).
   let attemptCount = 0;
-  if (isExec) {
+  if (showAsExec) {
     const { count } = await supabase
       .from("quiz_submissions")
       .select("id", { count: "exact", head: true })
@@ -135,7 +148,7 @@ export default async function QuizDetailPage({
   // 20260717002700). Grading stays server-side under the admin client.
   const answersByQuestion = new Map<string, Answer[]>();
   if (questionIds.length > 0) {
-    if (isExec) {
+    if (showAsExec) {
       const { data } = await supabase
         .from("quiz_answers")
         .select("id, question_id, answer_text, is_correct, position, tolerance")
@@ -177,7 +190,7 @@ export default async function QuizDetailPage({
   type ResponseRow = { question_id: string; response_text: string | null; is_correct: boolean | null };
   const reviewByQ = new Map<string, ReviewRow>();
   const respByQ = new Map<string, ResponseRow>();
-  if (!isExec && mySubmission?.submitted_at) {
+  if (!showAsExec && mySubmission?.submitted_at) {
     const [{ data: rev }, { data: resp }] = await Promise.all([
       supabase.rpc("quiz_review", { target_quiz_id: id }),
       supabase
@@ -194,6 +207,7 @@ export default async function QuizDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-10">
+      {previewAsStudent && <PreviewBanner backHref={backHref} />}
       <Link href="/quizzes" className="text-sm text-blue hover:underline">
         &larr; Back to Quizzes
       </Link>
@@ -205,8 +219,14 @@ export default async function QuizDetailPage({
             {questions.length} question{questions.length === 1 ? "" : "s"} &middot; {totalPts} pts
           </p>
         </div>
-        {isExec && (
+        {showAsExec && (
           <div className="flex flex-shrink-0 items-center gap-2">
+            <Link
+              href={`${backHref}?preview=student`}
+              className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
+            >
+              Student View
+            </Link>
             <Link
               href={`/quizzes/${id}/submissions`}
               className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
@@ -240,7 +260,7 @@ export default async function QuizDetailPage({
           </div>
         )}
       </div>
-      {isExec && attemptCount > 0 && (
+      {showAsExec && attemptCount > 0 && (
         <p className="mt-2 text-xs text-muted">
           {attemptCount} student{attemptCount === 1 ? " has" : "s have"} taken this quiz, so
           it can&rsquo;t be deleted — unpublish it to hide it while keeping their attempts.
@@ -252,7 +272,7 @@ export default async function QuizDetailPage({
       )}
 
       {/* Exec authoring view */}
-      {isExec ? (
+      {showAsExec ? (
         <div className="mt-8">
           <details className="mb-6 rounded-md border border-hair bg-white">
             <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-navy-deep">
@@ -391,57 +411,27 @@ export default async function QuizDetailPage({
             </ul>
           )}
         </div>
+      ) : previewAsStudent ? (
+        /* Read-only Student View: the quiz-taking layout with every field
+           disabled and no working submit — an exec can't submit (RLS
+           blocks it), so no <form>/submit action is rendered. */
+        <div className="mt-8 flex flex-col gap-6">
+          {takeOrder.map((q, i) => (
+            <TakeQuestion key={q.id} question={q} index={i} disabled />
+          ))}
+          {questions.length > 0 ? (
+            <p className="self-start rounded-md border border-[#B4531A]/30 bg-[#fff3e0] px-4 py-2.5 text-sm font-medium text-[#B4531A]">
+              Preview — you can&rsquo;t submit as an exec.
+            </p>
+          ) : (
+            <p className="text-sm text-muted">This quiz has no questions yet.</p>
+          )}
+        </div>
       ) : (
         /* Student — take the quiz */
         <form action={submitQuiz.bind(null, id)} className="mt-8 flex flex-col gap-6">
           {takeOrder.map((q, i) => (
-            <div key={q.id} className="rounded-md border border-hair bg-white p-4">
-              <div className="flex items-baseline gap-2">
-                <span className="text-sm font-medium text-text">{i + 1}.</span>
-                <div className="min-w-0 flex-1">
-                  <QuestionText text={q.question_text} />
-                </div>
-                <span className="whitespace-nowrap text-xs text-muted">{q.points} pts</span>
-              </div>
-              <div className="mt-3 flex flex-col gap-2">
-                {q.question_type === "multiple_choice" || q.question_type === "true_false" ? (
-                  [...q.quiz_answers].sort((a, b) => a.position - b.position).map((a) => (
-                    <label key={a.id} className="flex items-center gap-2 text-sm text-text">
-                      <input type="radio" name={`q_${q.id}`} value={a.id} className="h-4 w-4" />
-                      {a.answer_text}
-                    </label>
-                  ))
-                ) : q.question_type === "multiple_answer" ? (
-                  [...q.quiz_answers].sort((a, b) => a.position - b.position).map((a) => (
-                    <label key={a.id} className="flex items-center gap-2 text-sm text-text">
-                      <input type="checkbox" name={`q_${q.id}`} value={a.id} className="h-4 w-4" />
-                      {a.answer_text}
-                    </label>
-                  ))
-                ) : q.question_type === "numeric" ? (
-                  <input
-                    name={`q_${q.id}`}
-                    type="number"
-                    step="any"
-                    className="w-40 rounded-md border border-hair bg-white px-3 py-2 text-sm text-text outline-none focus:border-blue"
-                    placeholder="Your answer"
-                  />
-                ) : q.question_type === "short_answer" ? (
-                  <input
-                    name={`q_${q.id}`}
-                    className="w-full rounded-md border border-hair bg-white px-3 py-2 text-sm text-text outline-none focus:border-blue"
-                    placeholder="Your answer"
-                  />
-                ) : (
-                  <textarea
-                    name={`q_${q.id}`}
-                    rows={4}
-                    className="w-full rounded-md border border-hair bg-white px-3 py-2 text-sm text-text outline-none focus:border-blue"
-                    placeholder="Your response"
-                  />
-                )}
-              </div>
-            </div>
+            <TakeQuestion key={q.id} question={q} index={i} />
           ))}
           {questions.length > 0 ? (
             <button
@@ -455,6 +445,91 @@ export default async function QuizDetailPage({
           )}
         </form>
       )}
+    </div>
+  );
+}
+
+// One quiz question rendered as its take-quiz input(s). `disabled` powers
+// the read-only exec preview (Student View): fields render for layout only
+// and can't be edited or submitted.
+function TakeQuestion({
+  question: q,
+  index,
+  disabled = false,
+}: {
+  question: Question;
+  index: number;
+  disabled?: boolean;
+}) {
+  const disabledCls = disabled ? "cursor-not-allowed opacity-60" : "";
+  return (
+    <div className="rounded-md border border-hair bg-white p-4">
+      <div className="flex items-baseline gap-2">
+        <span className="text-sm font-medium text-text">{index + 1}.</span>
+        <div className="min-w-0 flex-1">
+          <QuestionText text={q.question_text} />
+        </div>
+        <span className="whitespace-nowrap text-xs text-muted">{q.points} pts</span>
+      </div>
+      <div className="mt-3 flex flex-col gap-2">
+        {q.question_type === "multiple_choice" || q.question_type === "true_false" ? (
+          [...q.quiz_answers].sort((a, b) => a.position - b.position).map((a) => (
+            <label
+              key={a.id}
+              className={`flex items-center gap-2 text-sm text-text ${disabledCls}`}
+            >
+              <input
+                type="radio"
+                name={`q_${q.id}`}
+                value={a.id}
+                disabled={disabled}
+                className="h-4 w-4"
+              />
+              {a.answer_text}
+            </label>
+          ))
+        ) : q.question_type === "multiple_answer" ? (
+          [...q.quiz_answers].sort((a, b) => a.position - b.position).map((a) => (
+            <label
+              key={a.id}
+              className={`flex items-center gap-2 text-sm text-text ${disabledCls}`}
+            >
+              <input
+                type="checkbox"
+                name={`q_${q.id}`}
+                value={a.id}
+                disabled={disabled}
+                className="h-4 w-4"
+              />
+              {a.answer_text}
+            </label>
+          ))
+        ) : q.question_type === "numeric" ? (
+          <input
+            name={`q_${q.id}`}
+            type="number"
+            step="any"
+            disabled={disabled}
+            className={`w-40 rounded-md border border-hair bg-white px-3 py-2 text-sm text-text outline-none focus:border-blue ${disabledCls}`}
+            placeholder="Your answer"
+          />
+        ) : q.question_type === "short_answer" ? (
+          <input
+            name={`q_${q.id}`}
+            disabled={disabled}
+            className={`w-full rounded-md border border-hair bg-white px-3 py-2 text-sm text-text outline-none focus:border-blue ${disabledCls}`}
+            placeholder="Your answer"
+          />
+        ) : (
+          <textarea
+            name={`q_${q.id}`}
+            rows={4}
+            disabled={disabled}
+            className={`w-full rounded-md border border-hair bg-white px-3 py-2 text-sm text-text outline-none focus:border-blue ${disabledCls}`}
+            placeholder="Your response"
+          />
+        )}
+      </div>
     </div>
   );
 }

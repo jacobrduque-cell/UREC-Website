@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { utcISOToPacificWallClock } from "@/lib/timezone";
 import { MarkdownField } from "../ui/markdown-field";
 import { SubmitButton } from "../ui/form-controls";
@@ -29,6 +29,48 @@ type ExistingAssignment = {
 // server/browser zone here would drift the prefill by the UTC offset.
 const toDatetimeLocal = utcISOToPacificWallClock;
 
+// Build a naive "YYYY-MM-DDTHH:mm" wall-clock string from a Date's local
+// fields. The server reads datetime-local values as Pacific (see
+// lib/timezone.ts), so we deliberately do NOT convert zones here — we
+// just serialize the wall-clock digits, matching how the input behaves.
+function toLocalInputValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Parse a "YYYY-MM-DDTHH:mm" datetime-local string as local wall clock.
+function fromLocalInputValue(value: string): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// The upcoming Friday at 5:00 PM. If today is Friday and it's still before
+// 5pm, use today; otherwise roll to next Friday.
+function upcomingFri5pm(): Date {
+  const now = new Date();
+  const d = new Date(now);
+  d.setHours(17, 0, 0, 0);
+  let add = (5 - d.getDay() + 7) % 7; // days until Friday (5)
+  if (add === 0 && now.getHours() >= 17) add = 7;
+  d.setDate(d.getDate() + add);
+  return d;
+}
+
+// The upcoming Sunday at 11:59 PM. If today is Sunday and it's still
+// before 11:59pm, use today; otherwise roll to next Sunday.
+function upcomingSun1159pm(): Date {
+  const now = new Date();
+  const d = new Date(now);
+  d.setHours(23, 59, 0, 0);
+  let add = (0 - d.getDay() + 7) % 7; // days until Sunday (0)
+  if (add === 0 && (now.getHours() > 23 || (now.getHours() === 23 && now.getMinutes() >= 59))) {
+    add = 7;
+  }
+  d.setDate(d.getDate() + add);
+  return d;
+}
+
 export function AssignmentForm({
   action,
   groups,
@@ -45,6 +87,25 @@ export function AssignmentForm({
   submitLabel: string;
 }) {
   const [state, formAction] = useActionState(action, {});
+  // Controlled so the quick-preset chips can fill it in. Seeded from the
+  // existing value via the same Pacific-aware helper used for prefill.
+  const [dueAt, setDueAt] = useState(toDatetimeLocal(existing?.due_at ?? null));
+
+  // "+1 week" builds off the current Due value if set, else now, and
+  // preserves the time of day.
+  const plusOneWeek = () => {
+    const base = fromLocalInputValue(dueAt) ?? new Date();
+    base.setDate(base.getDate() + 7);
+    setDueAt(toLocalInputValue(base));
+  };
+
+  const duePresets: { label: string; onClick: () => void }[] = [
+    { label: "This Fri 5pm", onClick: () => setDueAt(toLocalInputValue(upcomingFri5pm())) },
+    { label: "Sun 11:59pm", onClick: () => setDueAt(toLocalInputValue(upcomingSun1159pm())) },
+    { label: "+1 week", onClick: plusOneWeek },
+    { label: "Clear", onClick: () => setDueAt("") },
+  ];
+
   return (
     <form action={formAction} className="mt-8 flex flex-col gap-5">
       {state?.error && (
@@ -134,9 +195,22 @@ export function AssignmentForm({
             id="due_at"
             name="due_at"
             type="datetime-local"
-            defaultValue={toDatetimeLocal(existing?.due_at ?? null)}
+            value={dueAt}
+            onChange={(e) => setDueAt(e.target.value)}
             className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
           />
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {duePresets.map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={p.onClick}
+                className="rounded-md border border-hair px-2.5 py-1 text-xs font-medium text-muted transition-colors hover:bg-[#eef7ff]"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div>
           <label

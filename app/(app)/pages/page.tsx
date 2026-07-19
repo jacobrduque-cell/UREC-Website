@@ -54,29 +54,43 @@ export default async function PagesIndex() {
         )}
       </div>
 
-      <ul className="mt-8 divide-y divide-hair border-t border-hair">
-        {pages.map((p) => (
-          <li key={p.id} className="py-3.5">
+      {pages.length > 0 ? (
+        <ul className="mt-8 divide-y divide-hair border-t border-hair">
+          {pages.map((p) => (
+            <li key={p.id} className="py-3.5">
+              <Link
+                href={`/pages/${p.slug}`}
+                className="text-sm font-medium text-sky hover:underline"
+              >
+                {p.title}
+              </Link>
+              {!p.published && (
+                <span className="ml-2 rounded-full border border-hair px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  Draft
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="mt-8 rounded-md border border-hair bg-white py-16 text-center">
+          <div aria-hidden className="text-4xl opacity-70">📄</div>
+          <p className="mt-3 text-base font-medium text-text">No pages yet</p>
+          <p className="mt-1 text-sm text-muted">
+            {isExec
+              ? "Write a page to share reference material, guides, or notes."
+              : "Nothing here yet — check back soon."}
+          </p>
+          {isExec && (
             <Link
-              href={`/pages/${p.slug}`}
-              className="text-sm font-medium text-sky hover:underline"
+              href="/pages/new"
+              className="mt-5 inline-block rounded-md bg-blue px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
             >
-              {p.title}
+              New Page
             </Link>
-            {!p.published && (
-              <span className="ml-2 rounded-full border border-hair px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                Draft
-              </span>
-            )}
-          </li>
-        ))}
-        {pages.length === 0 && (
-          <li className="py-6 text-sm text-muted">
-            No pages yet.
-            {isExec && " Create the first one with New Page above."}
-          </li>
-        )}
-      </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

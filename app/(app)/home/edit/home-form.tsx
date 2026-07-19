@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { SubmitButton, FormError } from "../../ui/form-controls";
+import { MarkdownField } from "../../ui/markdown-field";
 
 type FormState = { error?: string };
 
@@ -25,8 +26,7 @@ export function HomeForm({
         >
           Front Page Content (Markdown)
         </label>
-        <textarea
-          id="body_markdown"
+        <MarkdownField
           name="body_markdown"
           rows={18}
           defaultValue={defaultBody}

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getIsExec, getIsGrader, oneOrFirst } from "@/lib/data/queries";
 import { submissionStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/submission-status";
+import { relativeTime } from "@/lib/relative-time";
 import { SortSelect } from "../ui/sort-select";
 import Link from "next/link";
 
@@ -193,7 +194,11 @@ export default async function AssignmentsPage({
                               )}
                             </span>
                             <span className="mt-0.5 block text-xs text-muted">
-                              {fmtDue(a.due_at)} &middot; {a.points_possible} pts
+                              {fmtDue(a.due_at)}
+                              {a.due_at && (
+                                <span className="text-muted/80"> &middot; {relativeTime(a.due_at)}</span>
+                              )}{" "}
+                              &middot; {a.points_possible} pts
                             </span>
                           </span>
                         </span>
@@ -231,7 +236,23 @@ export default async function AssignmentsPage({
       ))}
 
       {assignments.length === 0 && (
-        <p className="mt-8 text-sm text-muted">No assignments yet.</p>
+        <div className="mt-8 rounded-md border border-hair bg-white py-16 text-center">
+          <div aria-hidden className="text-4xl opacity-70">📝</div>
+          <p className="mt-3 text-base font-medium text-text">No assignments yet</p>
+          <p className="mt-1 text-sm text-muted">
+            {isExec
+              ? "Create the first assignment to get your analysts started."
+              : "Nothing here yet — check back soon."}
+          </p>
+          {isExec && (
+            <Link
+              href="/assignments/new"
+              className="mt-5 inline-block rounded-md bg-blue px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
+            >
+              New Assignment
+            </Link>
+          )}
+        </div>
       )}
     </div>
   );

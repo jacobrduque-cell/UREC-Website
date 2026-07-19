@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile, getMyGroupIds, submissionOwnerFilter } from "@/lib/data/queries";
+import { relativeTime } from "@/lib/relative-time";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Megaphone, ClipboardList, MessagesSquare, Folder, BookMarked } from "lucide-react";
@@ -160,6 +161,7 @@ export default async function DashboardPage() {
                     <p className="text-xs text-muted">
                       {a.points_possible} pts &middot; Due{" "}
                       {new Date(a.due_at).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles",  month: "short", day: "numeric" })}
+                      <span className="text-muted/80"> &middot; {relativeTime(a.due_at)}</span>
                     </p>
                   </li>
                 ))}
@@ -177,6 +179,7 @@ export default async function DashboardPage() {
                     <p className="font-medium text-text">{e.title}</p>
                     <p className="text-xs text-muted">
                       {new Date(e.starts_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles",  month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                      <span className="text-muted/80"> &middot; {relativeTime(e.starts_at)}</span>
                     </p>
                   </li>
                 ))}
@@ -194,6 +197,9 @@ export default async function DashboardPage() {
                     <p className="font-medium text-text">{g.submission?.assignment?.title ?? "Assignment"}</p>
                     <p className="text-xs text-muted">
                       {g.points_earned}/{g.submission?.assignment?.points_possible ?? "?"} pts
+                      {g.graded_at && (
+                        <span className="text-muted/80"> &middot; graded {relativeTime(g.graded_at)}</span>
+                      )}
                     </p>
                   </li>
                 ))}

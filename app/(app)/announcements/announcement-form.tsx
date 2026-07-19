@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { SubmitButton, FormError } from "../ui/form-controls";
+import { MarkdownField } from "../ui/markdown-field";
 
 type FormState = { error?: string };
 
@@ -44,12 +45,10 @@ export function AnnouncementForm({
         <label htmlFor="body" className={label}>
           Message
         </label>
-        <textarea
-          id="body"
+        <MarkdownField
           name="body"
-          required
           rows={8}
-          defaultValue={defaults?.body}
+          defaultValue={defaults?.body ?? ""}
           className={field}
         />
       </div>

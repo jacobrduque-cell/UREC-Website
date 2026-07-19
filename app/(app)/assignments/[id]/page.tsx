@@ -3,6 +3,7 @@ import { getIsExec, getIsGrader, getMyGroupIds, getSignedFileUrl, oneOrFirst } f
 import { renderMarkdown } from "@/lib/markdown";
 import { SubmitButton, ConfirmSubmitButton } from "../../ui/form-controls";
 import { CopyLinkButton } from "../../ui/copy-link-button";
+import { PreviewBanner } from "../../ui/preview-banner";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { addSubmissionComment, deleteAssignment, duplicateAssignment, submitAssignment } from "../actions";
@@ -70,10 +71,13 @@ function fmtDue(iso: string | null) {
 
 export default async function AssignmentDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ preview?: string }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -94,7 +98,16 @@ export default async function AssignmentDetailPage({
     getIsExec(),
     getIsGrader(a.course_id),
   ]);
-  const canManage = isExec || isGrader;
+  // Canvas-style "Student View": an exec can force the member experience
+  // with ?preview=student. In preview mode we treat the viewer as a
+  // non-manager so the whole page renders the student branch, and the
+  // submit UI is rendered strictly read-only (see the student branch and
+  // SubmissionFields' `disabled` prop) — an exec can't actually submit
+  // (submitAssignment is RLS-gated to enrolled non-exec users).
+  const previewAsStudent = isExec && sp.preview === "student";
+  const canManage = (isExec || isGrader) && !previewAsStudent;
+  const showAsExec = isExec && !previewAsStudent;
+  const backHref = `/assignments/${id}`;
 
   let myGroupId: string | null = null;
   if (!canManage && a.allow_group_submission) {
@@ -150,7 +163,10 @@ export default async function AssignmentDetailPage({
 
   const submissionCount = canManage ? (submissionData.count ?? 0) : 0;
   const mySubmission = canManage ? null : (submissionData.data as unknown as Submission | null);
-  const needsGroupToSubmit = !canManage && a.allow_group_submission && !myGroupId;
+  // An exec previewing has no group, so suppress the "you're not in a
+  // group" gate — we want to show the read-only submit layout instead.
+  const needsGroupToSubmit =
+    !canManage && a.allow_group_submission && !myGroupId && !previewAsStudent;
   const submitAction = submitAssignment.bind(null, id);
 
   // Availability window (see submitAssignment, which enforces it
@@ -160,6 +176,7 @@ export default async function AssignmentDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
+      {previewAsStudent && <PreviewBanner backHref={backHref} />}
       <Link href="/assignments" className="text-sm text-blue hover:underline">
         &larr; Back to Assignments
       </Link>
@@ -251,7 +268,7 @@ export default async function AssignmentDetailPage({
             >
               Review &amp; Grade
             </Link>
-            {isExec && (
+            {showAsExec && (
               <Link
                 href={`/assignments/${id}/edit`}
                 className="inline-block rounded-md border border-hair px-5 py-2 text-sm font-medium text-text transition-colors hover:bg-[#eef7ff]"
@@ -259,7 +276,7 @@ export default async function AssignmentDetailPage({
                 Edit
               </Link>
             )}
-            {isExec && (
+            {showAsExec && (
               <form action={duplicateAssignment.bind(null, id)}>
                 <SubmitButton
                   pendingText="Duplicating…"
@@ -269,7 +286,7 @@ export default async function AssignmentDetailPage({
                 </SubmitButton>
               </form>
             )}
-            {isExec && submissionCount === 0 && (
+            {showAsExec && submissionCount === 0 && (
               <form action={deleteAssignment.bind(null, id)}>
                 <ConfirmSubmitButton
                   message="Delete this assignment for good? This can't be undone."
@@ -280,9 +297,17 @@ export default async function AssignmentDetailPage({
                 </ConfirmSubmitButton>
               </form>
             )}
+            {showAsExec && (
+              <Link
+                href={`${backHref}?preview=student`}
+                className="inline-block rounded-md border border-hair px-5 py-2 text-sm font-medium text-text transition-colors hover:bg-[#eef7ff]"
+              >
+                Student View
+              </Link>
+            )}
             <CopyLinkButton className="inline-block rounded-md border border-hair px-5 py-2 text-sm font-medium text-text transition-colors hover:bg-[#eef7ff]" />
           </div>
-          {isExec && submissionCount > 0 && (
+          {showAsExec && submissionCount > 0 && (
             <p className="mt-3 text-xs text-muted">
               This assignment has submissions, so it can&rsquo;t be deleted — unpublish
               it from Edit if you want to hide it while keeping students&rsquo; work.
@@ -305,6 +330,22 @@ export default async function AssignmentDetailPage({
               This assignment isn&rsquo;t open for submissions yet — it opens{" "}
               {fmtDue(a.unlock_at)}.
             </p>
+          ) : previewAsStudent ? (
+            /* Read-only Student View: show the submit layout disabled — an
+               exec can't actually submit (RLS blocks it), so no real form
+               or working submit button is rendered. */
+            <div className="mt-4 flex flex-col gap-4">
+              {a.submission_type === "none" ? (
+                <p className="text-sm text-muted">
+                  No submission needed — this is turned in in person or another way.
+                </p>
+              ) : (
+                <SubmissionFields assignment={a} disabled />
+              )}
+              <p className="self-start rounded-md border border-[#B4531A]/30 bg-[#fff3e0] px-4 py-2.5 text-sm font-medium text-[#B4531A]">
+                Preview — you can&rsquo;t submit as an exec.
+              </p>
+            </div>
           ) : needsGroupToSubmit ? (
             <p className="mt-4 text-sm text-muted">
               You&rsquo;re not in a group yet, so there&rsquo;s nowhere for
@@ -370,34 +411,46 @@ export default async function AssignmentDetailPage({
   );
 }
 
-function SubmissionFields({ assignment: a }: { assignment: Assignment }) {
+function SubmissionFields({
+  assignment: a,
+  disabled = false,
+}: {
+  assignment: Assignment;
+  disabled?: boolean;
+}) {
+  // In preview (disabled) mode fields are shown for layout only — never
+  // `required` (so nothing can be validated/submitted) and visibly muted.
+  const disabledCls = disabled ? "cursor-not-allowed opacity-60" : "";
   return (
     <>
       {a.submission_type === "text" && (
         <textarea
           name="body_text"
-          required
+          required={!disabled}
+          disabled={disabled}
           rows={8}
           placeholder="Write your submission…"
-          className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
+          className={`w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue ${disabledCls}`}
         />
       )}
       {a.submission_type === "url" && (
         <input
           name="url"
           type="url"
-          required
+          required={!disabled}
+          disabled={disabled}
           placeholder="https://…"
-          className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue"
+          className={`w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none focus:border-blue ${disabledCls}`}
         />
       )}
       {a.submission_type === "file" && (
         <input
           name="file"
           type="file"
-          required
+          required={!disabled}
+          disabled={disabled}
           accept={a.accepted_file_types?.map((t) => `.${t}`).join(",")}
-          className="w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none file:mr-3 file:rounded-md file:border-0 file:bg-blue file:px-4 file:py-1.5 file:text-xs file:font-medium file:text-white"
+          className={`w-full rounded-md border border-hair bg-white px-3.5 py-2.5 text-sm text-text outline-none file:mr-3 file:rounded-md file:border-0 file:bg-blue file:px-4 file:py-1.5 file:text-xs file:font-medium file:text-white ${disabledCls}`}
         />
       )}
     </>
