@@ -17,6 +17,7 @@ import { AddQuestionForm } from "../add-question-form";
 import { QuizSettingsForm } from "./quiz-settings-form";
 import { ConfirmSubmitButton, SubmitButton } from "../../ui/form-controls";
 import { PreviewBanner } from "../../ui/preview-banner";
+import { Breadcrumbs } from "../../ui/breadcrumbs";
 
 type QuestionType =
   | "multiple_choice"
@@ -208,9 +209,12 @@ export default async function QuizDetailPage({
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-10">
       {previewAsStudent && <PreviewBanner backHref={backHref} />}
-      <Link href="/quizzes" className="text-sm text-blue hover:underline">
-        &larr; Back to Quizzes
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "Quizzes", href: "/quizzes" },
+          { label: quiz.title },
+        ]}
+      />
 
       <div className="mt-4 flex items-start justify-between gap-4">
         <div>

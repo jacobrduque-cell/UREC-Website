@@ -1,9 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { getIsExec } from "@/lib/data/queries";
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { gradeQuizResponses } from "../../actions";
 import { SubmitButton } from "../../../ui/form-controls";
+import { Breadcrumbs } from "../../../ui/breadcrumbs";
 
 type Question = {
   id: string;
@@ -68,9 +68,13 @@ export default async function QuizSubmissionsPage({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-10">
-      <Link href={`/quizzes/${id}`} className="text-sm text-blue hover:underline">
-        &larr; Back to {quiz.title}
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "Quizzes", href: "/quizzes" },
+          { label: quiz.title, href: `/quizzes/${id}` },
+          { label: "Submissions" },
+        ]}
+      />
       <h1 className="mt-4 font-display text-2xl font-bold text-navy-deep">
         Submissions &middot; {quiz.title}
       </h1>

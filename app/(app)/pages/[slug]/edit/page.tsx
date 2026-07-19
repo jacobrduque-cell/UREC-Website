@@ -3,6 +3,7 @@ import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
 import { notFound, redirect } from "next/navigation";
 import { updateWikiPage } from "../../actions";
 import { WikiPageForm } from "../../wiki-page-form";
+import { Breadcrumbs } from "../../../ui/breadcrumbs";
 
 type WikiPage = {
   title: string;
@@ -37,7 +38,14 @@ export default async function EditWikiPage({
 
   return (
     <div className="mx-auto w-full max-w-2xl px-8 py-12">
-      <h1 className="font-display text-2xl font-bold text-navy-deep">
+      <Breadcrumbs
+        items={[
+          { label: "Pages", href: "/pages" },
+          { label: page.title, href: `/pages/${slug}` },
+          { label: "Edit" },
+        ]}
+      />
+      <h1 className="mt-4 font-display text-2xl font-bold text-navy-deep">
         Edit Page
       </h1>
 

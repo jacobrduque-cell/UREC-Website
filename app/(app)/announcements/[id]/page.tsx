@@ -1,10 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { getIsExec } from "@/lib/data/queries";
+import { renderMarkdown } from "@/lib/markdown";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createReply, deleteAnnouncement } from "../actions";
 import { ConfirmSubmitButton } from "../../ui/form-controls";
 import { CopyLinkButton } from "../../ui/copy-link-button";
+import { Breadcrumbs } from "../../ui/breadcrumbs";
 import { ReplyForm } from "../reply-form";
 
 type Announcement = {
@@ -68,9 +70,12 @@ export default async function AnnouncementDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
-      <Link href="/announcements" className="text-sm text-blue hover:underline">
-        &larr; Back to Announcements
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "Announcements", href: "/announcements" },
+          { label: a.title },
+        ]}
+      />
 
       <div className="mt-4 flex items-center gap-2">
         {a.pinned && (
@@ -112,9 +117,10 @@ export default async function AnnouncementDetailPage({
         </div>
       )}
 
-      <p className="mt-6 whitespace-pre-wrap text-sm leading-relaxed text-text">
-        {a.body}
-      </p>
+      <div
+        className="rich-content mt-6 max-w-prose text-sm leading-relaxed text-text"
+        dangerouslySetInnerHTML={{ __html: renderMarkdown(a.body) }}
+      />
 
       <div className="mt-10 border-t border-hair pt-8">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">

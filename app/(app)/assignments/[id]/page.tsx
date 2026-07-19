@@ -4,6 +4,7 @@ import { renderMarkdown } from "@/lib/markdown";
 import { SubmitButton, ConfirmSubmitButton } from "../../ui/form-controls";
 import { CopyLinkButton } from "../../ui/copy-link-button";
 import { PreviewBanner } from "../../ui/preview-banner";
+import { Breadcrumbs } from "../../ui/breadcrumbs";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { addSubmissionComment, deleteAssignment, duplicateAssignment, submitAssignment } from "../actions";
@@ -177,9 +178,12 @@ export default async function AssignmentDetailPage({
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
       {previewAsStudent && <PreviewBanner backHref={backHref} />}
-      <Link href="/assignments" className="text-sm text-blue hover:underline">
-        &larr; Back to Assignments
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "Assignments", href: "/assignments" },
+          { label: a.title },
+        ]}
+      />
 
       <h1 className="mt-4 font-display text-2xl font-bold text-navy-deep">
         {a.title}

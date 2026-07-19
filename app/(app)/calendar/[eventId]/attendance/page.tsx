@@ -1,9 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { getIsExec } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { saveAttendance } from "./actions";
 import { AttendanceForm } from "./attendance-form";
+import { Breadcrumbs } from "../../../ui/breadcrumbs";
 
 type EnrollmentRow = {
   section: { name: string } | null;
@@ -63,10 +63,13 @@ export default async function AttendancePage({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-10">
-      <Link href="/calendar" className="text-xs text-blue hover:underline">
-        &larr; Calendar
-      </Link>
-      <h1 className="mt-2 font-display text-2xl font-bold text-navy-deep">Attendance</h1>
+      <Breadcrumbs
+        items={[
+          { label: "Calendar", href: "/calendar" },
+          { label: "Attendance" },
+        ]}
+      />
+      <h1 className="mt-4 font-display text-2xl font-bold text-navy-deep">Attendance</h1>
       <p className="mt-1 text-sm text-muted">
         {event.title} &middot;{" "}
         {new Date(event.starts_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles",

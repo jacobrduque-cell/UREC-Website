@@ -1,9 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { getIsExec } from "@/lib/data/queries";
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { updateAssignment } from "../../actions";
 import { AssignmentForm } from "../../assignment-form";
+import { Breadcrumbs } from "../../../ui/breadcrumbs";
 
 export default async function EditAssignmentPage({
   params,
@@ -42,9 +42,13 @@ export default async function EditAssignmentPage({
 
   return (
     <div className="mx-auto w-full max-w-2xl px-8 py-12">
-      <Link href={`/assignments/${id}`} className="text-sm text-blue hover:underline">
-        &larr; Back to {assignment.title}
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "Assignments", href: "/assignments" },
+          { label: assignment.title, href: `/assignments/${id}` },
+          { label: "Edit" },
+        ]}
+      />
 
       <h1 className="mt-4 font-display text-2xl font-bold text-navy-deep">
         Edit Assignment

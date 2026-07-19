@@ -3,6 +3,8 @@ import { getCurrentCourse, getIsExec, getIsGrader, oneOrFirst } from "@/lib/data
 import { submissionStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/submission-status";
 import { relativeTime } from "@/lib/relative-time";
 import { SortSelect } from "../ui/sort-select";
+import { BulkPublishBar } from "../ui/bulk-publish-bar";
+import { bulkSetAssignmentsPublished } from "./actions";
 import Link from "next/link";
 
 type Grade = { points_earned: number };
@@ -46,13 +48,29 @@ function fmtDue(iso: string | null) {
   return `Due ${new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles",  month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
 }
 
+// Submitted attempts on this assignment that still have no grade.
+function needsGradingCount(a: AssignmentRow): number {
+  return a.submissions.filter(
+    (s) => s.submitted_at && oneOrFirst(s.grades)?.points_earned == null,
+  ).length;
+}
+
+// Manager-only view filters (students never see drafts — RLS — so the
+// control is shown to exec/graders only).
+const FILTERS = [
+  { value: "all", label: "All" },
+  { value: "drafts", label: "Drafts" },
+  { value: "grading", label: "Needs grading" },
+];
+
 export default async function AssignmentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sort?: string }>;
+  searchParams: Promise<{ sort?: string; filter?: string }>;
 }) {
-  const { sort: sortParam } = await searchParams;
+  const { sort: sortParam, filter: filterParam } = await searchParams;
   const sort = SORTS.some((s) => s.value === sortParam) ? sortParam! : "due";
+  const filter = FILTERS.some((f) => f.value === filterParam) ? filterParam! : "all";
   const supabase = await createClient();
 
   const [course, isExec] = await Promise.all([getCurrentCourse(), getIsExec()]);
@@ -63,36 +81,30 @@ export default async function AssignmentsPage({
   // their own rows AND their group's rows (submissions_select_own_or_exec),
   // so we do NOT filter by user_id here — doing so would drop group
   // submissions (user_id is null on those) and wrongly show them as
-  // Missing. Graders/exec get every submission (used only for the
-  // "N submitted" count), which is fine — they don't see the status pills.
-  // Managers only need a submission COUNT per assignment, so don't also
-  // pull every submission's grade — at 115 members × dozens of
-  // assignments that embed materialized thousands of rows on every page
-  // load. Members get the fuller embed (RLS scopes it to just their own
-  // and their group's rows, so it stays tiny) to render a status pill.
-  // Managers get submitted_at + a grade marker per submission so the list
-  // can show a "needs grading" badge. This adds columns, not rows (the
-  // submissions embed already materialized one row per submission for the
-  // count), so it stays a single query at the 115-member scale.
-  const manageSelect = `id, title, points_possible, due_at, published, created_at,
-           assignment_group:assignment_groups(name, position),
-           submissions(id, submitted_at, grades(points_earned))`;
-  const memberSelect = `id, title, points_possible, due_at, published, created_at,
+  // Missing. Managers get submitted_at + a grade marker per submission so
+  // the list can show a "needs grading" badge; this adds columns, not
+  // rows, so it stays a single query at the 115-member scale.
+  const select = `id, title, points_possible, due_at, published, created_at,
            assignment_group:assignment_groups(name, position),
            submissions(id, submitted_at, grades(points_earned))`;
   const query = course
     ? supabase
         .from("assignments")
-        .select(canManage ? manageSelect : memberSelect)
+        .select(select)
         .eq("course_id", course.id)
         .order("due_at", { ascending: true })
     : null;
   const { data } = query ? await query : { data: null };
 
-  const assignments = sortAssignments(
-    (data ?? []) as unknown as AssignmentRow[],
-    sort,
-  );
+  const allAssignments = (data ?? []) as unknown as AssignmentRow[];
+  const anyAssignments = allAssignments.length > 0;
+  let assignments = sortAssignments(allAssignments, sort);
+  if (canManage && filter === "drafts") assignments = assignments.filter((a) => !a.published);
+  if (canManage && filter === "grading")
+    assignments = assignments.filter((a) => needsGradingCount(a) > 0);
+
+  const publishAll = bulkSetAssignmentsPublished.bind(null, true);
+  const unpublishAll = bulkSetAssignmentsPublished.bind(null, false);
 
   const groups = new Map<string, AssignmentRow[]>();
   for (const a of assignments) {
@@ -129,113 +141,65 @@ export default async function AssignmentsPage({
         )}
       </div>
 
-      {assignments.length > 0 && (
-        <div className="mt-6 flex justify-end">
-          <SortSelect options={SORTS} current={sort} basePath="/assignments" />
+      {anyAssignments && (
+        <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+          {canManage && (
+            <SortSelect
+              options={FILTERS}
+              current={filter}
+              basePath="/assignments"
+              paramName="filter"
+              label="Show"
+              preserve={{ sort: sort !== "due" ? sort : undefined }}
+            />
+          )}
+          <SortSelect
+            options={SORTS}
+            current={sort}
+            basePath="/assignments"
+            preserve={{ filter: filter !== "all" ? filter : undefined }}
+          />
         </div>
       )}
 
-      {orderedGroups.map(([groupName, items]) => (
-        <div key={groupName} className="mt-8">
-          {/* bCourses assignment-group block: a bordered card with a
-              grey group header, then rows carrying a green status bar on
-              the left, a type icon, a bold title, and a due/points line. */}
-          <div className="overflow-hidden rounded-md border border-hair">
-            <div className="bg-[#f2f4f4] px-4 py-2.5">
-              <h2 className="text-sm font-bold text-navy-deep">{groupName}</h2>
-            </div>
-            <ul className="divide-y divide-hair">
-              {items.map((a) => {
-                const sub = a.submissions[0];
-                const grade = oneOrFirst(sub?.grades)?.points_earned;
-                const submitted = a.submissions.length > 0;
-                // Manager view: how many submitted attempts still have no grade.
-                const needsGrading = canManage
-                  ? a.submissions.filter(
-                      (s) => s.submitted_at && oneOrFirst(s.grades)?.points_earned == null,
-                    ).length
-                  : 0;
-                const status = submissionStatus({
-                  dueAt: a.due_at,
-                  submittedAt: sub?.submitted_at,
-                  graded: grade != null,
-                });
+      {assignments.length === 0 && anyAssignments && (
+        <p className="mt-8 text-sm text-muted">No assignments match this filter.</p>
+      )}
 
-                // Manage view shows the roster count; student view shows a
-                // status pill (Late / Missing / Submitted / Graded).
-                const barColor =
-                  status === "missing"
-                    ? "bg-neg"
-                    : status === "late"
-                      ? "bg-[#B4531A]"
-                      : grade != null || submitted
-                        ? "bg-pos"
-                        : "bg-hair";
-
-                return (
-                  <li key={a.id}>
-                    <Link
-                      href={`/assignments/${a.id}`}
-                      className="flex items-stretch transition-colors hover:bg-[#eef7ff]"
-                    >
-                      <span className={`w-1 flex-shrink-0 ${barColor}`} aria-hidden />
-                      <span className="flex flex-1 items-center justify-between gap-4 py-3 pl-3 pr-4">
-                        <span className="flex items-center gap-2.5">
-                          <span aria-hidden className="text-base">📝</span>
-                          <span>
-                            <span className="flex items-center gap-2">
-                              <span className="text-sm font-semibold text-sky">
-                                {a.title}
-                              </span>
-                              {canManage && !a.published && (
-                                <span className="rounded-full border border-hair px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                                  Draft
-                                </span>
-                              )}
-                            </span>
-                            <span className="mt-0.5 block text-xs text-muted">
-                              {fmtDue(a.due_at)}
-                              {a.due_at && (
-                                <span className="text-muted/80"> &middot; {relativeTime(a.due_at)}</span>
-                              )}{" "}
-                              &middot; {a.points_possible} pts
-                            </span>
-                          </span>
-                        </span>
-                        {canManage ? (
-                          <span className="flex items-center gap-2 whitespace-nowrap text-sm">
-                            {needsGrading > 0 && (
-                              <span className="rounded-full bg-[#fff3e0] px-2 py-0.5 text-xs font-medium text-[#B4531A]">
-                                {needsGrading} to grade
-                              </span>
-                            )}
-                            <span className="text-muted">{a.submissions.length} submitted</span>
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-2 whitespace-nowrap">
-                            {grade != null && (
-                              <span className="text-sm font-medium text-navy-deep">
-                                {grade}/{a.points_possible}
-                              </span>
-                            )}
-                            <span
-                              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_PILL[status]}`}
-                            >
-                              {STATUS_LABEL[status]}
-                            </span>
-                          </span>
-                        )}
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+      {assignments.length > 0 && canManage && (
+        <form>
+          <div className="mt-6 flex justify-end border-b border-hair pb-3">
+            <BulkPublishBar
+              publishAction={publishAll}
+              unpublishAction={unpublishAll}
+              noun="checked assignments"
+            />
           </div>
-        </div>
-      ))}
+          {orderedGroups.map(([groupName, items]) => (
+            <AssignmentGroup
+              key={groupName}
+              groupName={groupName}
+              items={items}
+              canManage={canManage}
+              selectable
+            />
+          ))}
+        </form>
+      )}
 
-      {assignments.length === 0 && (
+      {assignments.length > 0 &&
+        !canManage &&
+        orderedGroups.map(([groupName, items]) => (
+          <AssignmentGroup
+            key={groupName}
+            groupName={groupName}
+            items={items}
+            canManage={canManage}
+            selectable={false}
+          />
+        ))}
+
+      {!anyAssignments && (
         <div className="mt-8 rounded-md border border-hair bg-white py-16 text-center">
           <div aria-hidden className="text-4xl opacity-70">📝</div>
           <p className="mt-3 text-base font-medium text-text">No assignments yet</p>
@@ -254,6 +218,119 @@ export default async function AssignmentsPage({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// One bCourses-style assignment-group block: a bordered card with a grey
+// group header, then rows carrying a status bar, a type icon, the title,
+// and a due/points line. `selectable` adds the bulk-select checkbox (only
+// rendered inside the manager's <form>).
+function AssignmentGroup({
+  groupName,
+  items,
+  canManage,
+  selectable,
+}: {
+  groupName: string;
+  items: AssignmentRow[];
+  canManage: boolean;
+  selectable: boolean;
+}) {
+  return (
+    <div className="mt-8">
+      <div className="overflow-hidden rounded-md border border-hair">
+        <div className="bg-[#f2f4f4] px-4 py-2.5">
+          <h2 className="text-sm font-bold text-navy-deep">{groupName}</h2>
+        </div>
+        <ul className="divide-y divide-hair">
+          {items.map((a) => {
+            const sub = a.submissions[0];
+            const grade = oneOrFirst(sub?.grades)?.points_earned;
+            const submitted = a.submissions.length > 0;
+            const needsGrading = canManage ? needsGradingCount(a) : 0;
+            const status = submissionStatus({
+              dueAt: a.due_at,
+              submittedAt: sub?.submitted_at,
+              graded: grade != null,
+            });
+            const barColor =
+              status === "missing"
+                ? "bg-neg"
+                : status === "late"
+                  ? "bg-[#B4531A]"
+                  : grade != null || submitted
+                    ? "bg-pos"
+                    : "bg-hair";
+
+            return (
+              <li key={a.id} className="flex items-stretch">
+                {selectable && (
+                  <label className="flex items-center pl-3" aria-label={`Select ${a.title}`}>
+                    <input
+                      type="checkbox"
+                      name="ids"
+                      value={a.id}
+                      className="h-4 w-4"
+                    />
+                  </label>
+                )}
+                <Link
+                  href={`/assignments/${a.id}`}
+                  className="flex flex-1 items-stretch transition-colors hover:bg-[#eef7ff]"
+                >
+                  <span className={`w-1 flex-shrink-0 ${barColor}`} aria-hidden />
+                  <span className="flex flex-1 items-center justify-between gap-4 py-3 pl-3 pr-4">
+                    <span className="flex items-center gap-2.5">
+                      <span aria-hidden className="text-base">📝</span>
+                      <span>
+                        <span className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-sky">{a.title}</span>
+                          {canManage && !a.published && (
+                            <span className="rounded-full border border-hair px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                              Draft
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted">
+                          {fmtDue(a.due_at)}
+                          {a.due_at && (
+                            <span className="text-muted/80"> &middot; {relativeTime(a.due_at)}</span>
+                          )}{" "}
+                          &middot; {a.points_possible} pts
+                        </span>
+                      </span>
+                    </span>
+                    {canManage ? (
+                      <span className="flex items-center gap-2 whitespace-nowrap text-sm">
+                        {needsGrading > 0 && (
+                          <span className="rounded-full bg-[#fff3e0] px-2 py-0.5 text-xs font-medium text-[#B4531A]">
+                            {needsGrading} to grade
+                          </span>
+                        )}
+                        <span className="text-muted">{a.submissions.length} submitted</span>
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2 whitespace-nowrap">
+                        {grade != null && (
+                          <span className="text-sm font-medium text-navy-deep">
+                            {grade}/{a.points_possible}
+                          </span>
+                        )}
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_PILL[status]}`}
+                        >
+                          {STATUS_LABEL[status]}
+                        </span>
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </div>
   );
 }

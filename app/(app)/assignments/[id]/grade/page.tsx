@@ -3,6 +3,7 @@ import { getIsExec, getIsGrader, oneOrFirst } from "@/lib/data/queries";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { addSubmissionComment, gradeSubmission } from "../../actions";
+import { Breadcrumbs } from "../../../ui/breadcrumbs";
 
 type Grade = {
   points_earned: number;
@@ -100,12 +101,13 @@ export default async function GradeAssignmentPage({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
-      <Link
-        href={`/assignments/${id}`}
-        className="text-sm text-blue hover:underline"
-      >
-        &larr; Back to {assignment.title}
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "Assignments", href: "/assignments" },
+          { label: assignment.title, href: `/assignments/${id}` },
+          { label: "Grade" },
+        ]}
+      />
 
       <h1 className="mt-4 font-display text-2xl font-bold text-navy-deep">
         Grade: {assignment.title}

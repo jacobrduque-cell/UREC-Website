@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { deleteWikiPage, toggleWikiPublished } from "../actions";
 import { ConfirmSubmitButton } from "../../ui/form-controls";
+import { Breadcrumbs } from "../../ui/breadcrumbs";
 
 type WikiPage = {
   id: string;
@@ -39,7 +40,13 @@ export default async function WikiPageDetail({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
-      <div className="flex items-start justify-between gap-4">
+      <Breadcrumbs
+        items={[
+          { label: "Pages", href: "/pages" },
+          { label: page.title },
+        ]}
+      />
+      <div className="mt-4 flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-bold text-navy-deep">
             {page.title}

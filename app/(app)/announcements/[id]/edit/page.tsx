@@ -3,6 +3,7 @@ import { getIsExec } from "@/lib/data/queries";
 import { notFound, redirect } from "next/navigation";
 import { updateAnnouncement } from "../../actions";
 import { AnnouncementForm } from "../../announcement-form";
+import { Breadcrumbs } from "../../../ui/breadcrumbs";
 
 export default async function EditAnnouncementPage({
   params,
@@ -25,7 +26,14 @@ export default async function EditAnnouncementPage({
 
   return (
     <div className="mx-auto w-full max-w-2xl px-8 py-12">
-      <h1 className="font-display text-2xl font-bold text-navy-deep">Edit Announcement</h1>
+      <Breadcrumbs
+        items={[
+          { label: "Announcements", href: "/announcements" },
+          { label: a.title, href: `/announcements/${id}` },
+          { label: "Edit" },
+        ]}
+      />
+      <h1 className="mt-4 font-display text-2xl font-bold text-navy-deep">Edit Announcement</h1>
 
       <AnnouncementForm
         action={updateAction}

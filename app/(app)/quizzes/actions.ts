@@ -208,6 +208,19 @@ export async function deleteQuiz(quizId: string) {
   redirect("/quizzes");
 }
 
+// Publish or unpublish several quizzes at once from the list page. RLS
+// re-enforces exec. IDs come from the checked rows (name="ids").
+export async function bulkSetQuizzesPublished(published: boolean, formData: FormData) {
+  const ids = formData.getAll("ids").map(String).filter(Boolean);
+  if (ids.length === 0) return;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("quizzes").update({ published }).in("id", ids);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/quizzes");
+}
+
 // Duplicate a quiz — including every question, answer option, settings,
 // explanations, and numeric tolerances — into the same course as an
 // unpublished draft titled "… (copy)". RLS re-enforces exec. Lets exec

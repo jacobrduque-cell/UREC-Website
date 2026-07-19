@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { createDiscussionReply } from "../actions";
 import { ReplyForm } from "./reply-form";
+import { Breadcrumbs } from "../../ui/breadcrumbs";
 
 type Topic = {
   id: string;
@@ -61,9 +61,12 @@ export default async function DiscussionDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-10">
-      <Link href="/discussions" className="text-sm text-blue hover:underline">
-        &larr; Back to Discussions
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "Discussions", href: "/discussions" },
+          { label: t.title },
+        ]}
+      />
 
       <h1 className="mt-4 font-display text-2xl font-bold text-navy-deep">
         {t.title}

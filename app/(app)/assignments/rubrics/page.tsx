@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createRubric, deleteRubric } from "../actions";
 import { RubricForm } from "./rubric-form";
 import { ConfirmSubmitButton } from "../../ui/form-controls";
+import { Breadcrumbs } from "../../ui/breadcrumbs";
 
 type Criterion = { id: string; criterion: string; description: string; points: number; position: number };
 type Rubric = { id: string; title: string; rubric_criteria: Criterion[] };
@@ -40,9 +40,12 @@ export default async function RubricsPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
-      <Link href="/assignments/new" className="text-sm text-blue hover:underline">
-        &larr; Back to New Assignment
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "Assignments", href: "/assignments" },
+          { label: "Rubrics" },
+        ]}
+      />
 
       <h1 className="mt-4 font-display text-2xl font-bold text-navy-deep">
         Rubrics
