@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
+import { SortSelect } from "../ui/sort-select";
 import Link from "next/link";
 
 type AnnouncementRow = {
@@ -12,12 +13,44 @@ type AnnouncementRow = {
   author: { full_name: string | null; email: string } | null;
 };
 
+const SORTS = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "title", label: "Title (A–Z)" },
+];
+
 function excerpt(body: string, max = 140) {
   const plain = body.replace(/\s+/g, " ").trim();
   return plain.length > max ? `${plain.slice(0, max)}…` : plain;
 }
 
-export default async function AnnouncementsPage() {
+// Pinned always stays on top; the chosen sort orders everything within
+// each pinned/unpinned band. Drafts (no published_at) sort as "newest"
+// so work-in-progress stays visible at the top.
+function sortAnnouncements(list: AnnouncementRow[], sort: string): AnnouncementRow[] {
+  const byPinned = (a: AnnouncementRow, b: AnnouncementRow) =>
+    Number(b.pinned) - Number(a.pinned);
+  const t = (v: string | null, fallback: number) =>
+    v ? new Date(v).getTime() : fallback;
+  const arr = [...list];
+  if (sort === "title")
+    return arr.sort((a, b) => byPinned(a, b) || a.title.localeCompare(b.title));
+  if (sort === "oldest")
+    return arr.sort(
+      (a, b) => byPinned(a, b) || t(a.published_at, Infinity) - t(b.published_at, Infinity),
+    );
+  return arr.sort(
+    (a, b) => byPinned(a, b) || t(b.published_at, Infinity) - t(a.published_at, Infinity),
+  );
+}
+
+export default async function AnnouncementsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string }>;
+}) {
+  const { sort: sortParam } = await searchParams;
+  const sort = SORTS.some((s) => s.value === sortParam) ? sortParam! : "newest";
   const [course, isExec] = await Promise.all([
     getCurrentCourse(),
     getIsExec(),
@@ -35,7 +68,10 @@ export default async function AnnouncementsPage() {
         .order("published_at", { ascending: false })
     : { data: null };
 
-  const announcements = (data ?? []) as unknown as AnnouncementRow[];
+  const announcements = sortAnnouncements(
+    (data ?? []) as unknown as AnnouncementRow[],
+    sort,
+  );
 
   return (
     <div className="mx-auto w-full max-w-4xl px-8 py-12">
@@ -57,6 +93,12 @@ export default async function AnnouncementsPage() {
           </Link>
         )}
       </div>
+
+      {announcements.length > 0 && (
+        <div className="mt-6 flex justify-end">
+          <SortSelect options={SORTS} current={sort} basePath="/announcements" />
+        </div>
+      )}
 
       <ul className="mt-8 divide-y divide-hair border-t border-hair">
         {announcements.map((a) => {

@@ -218,6 +218,54 @@ export async function createRubric(
   redirect("/assignments/rubrics");
 }
 
+// Delete an assignment. RLS re-enforces exec. Guarded against destroying
+// student work: deleting an assignment cascades its submissions away, so
+// we refuse when any exist (the UI only offers Delete when there are
+// none — this is the server-side backstop). Drafts and unused
+// assignments have no submissions and delete cleanly.
+export async function deleteAssignment(assignmentId: string) {
+  const supabase = await createClient();
+
+  const { count } = await supabase
+    .from("submissions")
+    .select("id", { count: "exact", head: true })
+    .eq("assignment_id", assignmentId);
+  if ((count ?? 0) > 0) {
+    throw new Error(
+      "This assignment has submissions — unpublish it instead of deleting, to keep students' work.",
+    );
+  }
+
+  const { error } = await supabase.from("assignments").delete().eq("id", assignmentId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/assignments");
+  redirect("/assignments");
+}
+
+// Delete a reusable rubric. Refuse while it's attached to any assignment
+// (deleting would cascade those links away and strip the rubric off a
+// live assignment); detach it there first.
+export async function deleteRubric(rubricId: string) {
+  const supabase = await createClient();
+
+  const { count } = await supabase
+    .from("assignment_rubrics")
+    .select("assignment_id", { count: "exact", head: true })
+    .eq("rubric_id", rubricId);
+  if ((count ?? 0) > 0) {
+    throw new Error(
+      "This rubric is attached to an assignment — remove it from the assignment first, then delete it.",
+    );
+  }
+
+  const { error } = await supabase.from("rubrics").delete().eq("id", rubricId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/assignments/rubrics");
+  redirect("/assignments/rubrics");
+}
+
 export async function submitAssignment(assignmentId: string, formData: FormData) {
   const supabase = await createClient();
   const {

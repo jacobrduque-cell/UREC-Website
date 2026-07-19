@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getIsExec, getIsGrader, oneOrFirst } from "@/lib/data/queries";
 import { submissionStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/submission-status";
+import { SortSelect } from "../ui/sort-select";
 import Link from "next/link";
 
 type Grade = { points_earned: number };
@@ -9,16 +10,48 @@ type AssignmentRow = {
   title: string;
   points_possible: number;
   due_at: string | null;
+  published: boolean;
+  created_at: string;
   assignment_group: { name: string; position: number } | null;
   submissions: { id: string; submitted_at: string | null; grades: Grade | Grade[] | null }[];
 };
+
+const SORTS = [
+  { value: "due", label: "Due date" },
+  { value: "title", label: "Title (A–Z)" },
+  { value: "points", label: "Points (high→low)" },
+  { value: "newest", label: "Newest" },
+];
+
+function sortAssignments(list: AssignmentRow[], sort: string): AssignmentRow[] {
+  const arr = [...list];
+  if (sort === "title") return arr.sort((a, b) => a.title.localeCompare(b.title));
+  if (sort === "points") return arr.sort((a, b) => b.points_possible - a.points_possible);
+  if (sort === "newest")
+    return arr.sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+  // due (default): soonest first, undated last.
+  return arr.sort((a, b) => {
+    if (!a.due_at && !b.due_at) return 0;
+    if (!a.due_at) return 1;
+    if (!b.due_at) return -1;
+    return new Date(a.due_at).getTime() - new Date(b.due_at).getTime();
+  });
+}
 
 function fmtDue(iso: string | null) {
   if (!iso) return "No due date";
   return `Due ${new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles",  month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
 }
 
-export default async function AssignmentsPage() {
+export default async function AssignmentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string }>;
+}) {
+  const { sort: sortParam } = await searchParams;
+  const sort = SORTS.some((s) => s.value === sortParam) ? sortParam! : "due";
   const supabase = await createClient();
 
   const [course, isExec] = await Promise.all([getCurrentCourse(), getIsExec()]);
@@ -36,10 +69,10 @@ export default async function AssignmentsPage() {
   // assignments that embed materialized thousands of rows on every page
   // load. Members get the fuller embed (RLS scopes it to just their own
   // and their group's rows, so it stays tiny) to render a status pill.
-  const manageSelect = `id, title, points_possible, due_at,
+  const manageSelect = `id, title, points_possible, due_at, published, created_at,
            assignment_group:assignment_groups(name, position),
            submissions(id)`;
-  const memberSelect = `id, title, points_possible, due_at,
+  const memberSelect = `id, title, points_possible, due_at, published, created_at,
            assignment_group:assignment_groups(name, position),
            submissions(id, submitted_at, grades(points_earned))`;
   const query = course
@@ -51,7 +84,10 @@ export default async function AssignmentsPage() {
     : null;
   const { data } = query ? await query : { data: null };
 
-  const assignments = (data ?? []) as unknown as AssignmentRow[];
+  const assignments = sortAssignments(
+    (data ?? []) as unknown as AssignmentRow[],
+    sort,
+  );
 
   const groups = new Map<string, AssignmentRow[]>();
   for (const a of assignments) {
@@ -87,6 +123,12 @@ export default async function AssignmentsPage() {
           </Link>
         )}
       </div>
+
+      {assignments.length > 0 && (
+        <div className="mt-6 flex justify-end">
+          <SortSelect options={SORTS} current={sort} basePath="/assignments" />
+        </div>
+      )}
 
       {orderedGroups.map(([groupName, items]) => (
         <div key={groupName} className="mt-8">
@@ -130,8 +172,15 @@ export default async function AssignmentsPage() {
                         <span className="flex items-center gap-2.5">
                           <span aria-hidden className="text-base">📝</span>
                           <span>
-                            <span className="block text-sm font-semibold text-sky">
-                              {a.title}
+                            <span className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-sky">
+                                {a.title}
+                              </span>
+                              {canManage && !a.published && (
+                                <span className="rounded-full border border-hair px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                                  Draft
+                                </span>
+                              )}
                             </span>
                             <span className="mt-0.5 block text-xs text-muted">
                               {fmtDue(a.due_at)} &middot; {a.points_possible} pts

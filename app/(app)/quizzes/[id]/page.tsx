@@ -3,9 +3,10 @@ import { getIsExec } from "@/lib/data/queries";
 import { renderMarkdown } from "@/lib/markdown";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { addQuestion, submitQuiz, toggleQuizPublished, updateQuizSettings } from "../actions";
+import { addQuestion, deleteQuiz, submitQuiz, toggleQuizPublished, updateQuizSettings } from "../actions";
 import { AddQuestionForm } from "../add-question-form";
 import { QuizSettingsForm } from "./quiz-settings-form";
+import { ConfirmSubmitButton } from "../../ui/form-controls";
 
 type QuestionType =
   | "multiple_choice"
@@ -99,6 +100,17 @@ export default async function QuizDetailPage({
     .eq("id", id)
     .maybeSingle();
   if (!quiz) notFound();
+
+  // Exec-only: has anyone taken this quiz? Delete is offered only when no
+  // attempts exist (deleting cascades them away).
+  let attemptCount = 0;
+  if (isExec) {
+    const { count } = await supabase
+      .from("quiz_submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("quiz_id", id);
+    attemptCount = count ?? 0;
+  }
 
   const { data: questionsData } = await supabase
     .from("quiz_questions")
@@ -197,9 +209,26 @@ export default async function QuizDetailPage({
                 {quiz.published ? "Unpublish" : "Publish"}
               </button>
             </form>
+            {attemptCount === 0 && (
+              <form action={deleteQuiz.bind(null, id)}>
+                <ConfirmSubmitButton
+                  message="Delete this quiz and all its questions? This can't be undone."
+                  pendingText="Deleting…"
+                  className="whitespace-nowrap rounded-md border border-neg/40 px-4 py-2 text-xs font-medium text-neg transition-colors hover:bg-[#fdecea]"
+                >
+                  Delete
+                </ConfirmSubmitButton>
+              </form>
+            )}
           </div>
         )}
       </div>
+      {isExec && attemptCount > 0 && (
+        <p className="mt-2 text-xs text-muted">
+          {attemptCount} student{attemptCount === 1 ? " has" : "s have"} taken this quiz, so
+          it can&rsquo;t be deleted — unpublish it to hide it while keeping their attempts.
+        </p>
+      )}
 
       {quiz.description && (
         <p className="mt-4 text-sm text-text">{quiz.description}</p>

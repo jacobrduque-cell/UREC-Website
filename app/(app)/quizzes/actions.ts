@@ -184,6 +184,30 @@ export async function toggleQuizPublished(quizId: string, currentlyPublished: bo
   revalidatePath(`/quizzes/${quizId}`);
 }
 
+// Delete a quiz and its questions (cascade). RLS re-enforces exec.
+// Guarded against destroying attempts: deleting a quiz cascades away
+// every student submission/response, so we refuse when any exist (the UI
+// only offers Delete when there are none). Drafts delete cleanly.
+export async function deleteQuiz(quizId: string) {
+  const supabase = await createClient();
+
+  const { count } = await supabase
+    .from("quiz_submissions")
+    .select("id", { count: "exact", head: true })
+    .eq("quiz_id", quizId);
+  if ((count ?? 0) > 0) {
+    throw new Error(
+      "Students have already taken this quiz — unpublish it instead of deleting, to keep their attempts.",
+    );
+  }
+
+  const { error } = await supabase.from("quizzes").delete().eq("id", quizId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/quizzes");
+  redirect("/quizzes");
+}
+
 /**
  * Student submits a quiz attempt. Grading uses the admin client so the
  * authoritative is_correct flags are read server-side and never trusted

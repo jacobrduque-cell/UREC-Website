@@ -125,3 +125,27 @@ export async function toggleWikiPublished(
   revalidatePath("/pages");
   revalidatePath(`/pages/${slug}`);
 }
+
+// Delete a wiki page. RLS re-enforces exec. Any module items pointing at
+// the page cascade away with it (module_items.page_id ON DELETE CASCADE),
+// so there's no orphaned reference. The Syllabus lives as a reserved-slug
+// wiki page edited on its own route — never delete it here.
+export async function deleteWikiPage(slug: string) {
+  if (slug === "syllabus") {
+    throw new Error("The syllabus can't be deleted — clear it from the Syllabus editor instead.");
+  }
+
+  const supabase = await createClient();
+  const course = await getCurrentCourse();
+  if (!course) throw new Error("No active course found.");
+
+  const { error } = await supabase
+    .from("wiki_pages")
+    .delete()
+    .eq("course_id", course.id)
+    .eq("slug", slug);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/pages");
+  redirect("/pages");
+}

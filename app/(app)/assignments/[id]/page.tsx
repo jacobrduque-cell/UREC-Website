@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { getIsExec, getIsGrader, getMyGroupIds, getSignedFileUrl, oneOrFirst } from "@/lib/data/queries";
 import { renderMarkdown } from "@/lib/markdown";
-import { SubmitButton } from "../../ui/form-controls";
+import { SubmitButton, ConfirmSubmitButton } from "../../ui/form-controls";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { addSubmissionComment, submitAssignment } from "../actions";
+import { addSubmissionComment, deleteAssignment, submitAssignment } from "../actions";
 
 type Grade = { points_earned: number };
 type Comment = {
@@ -243,7 +243,7 @@ export default async function AssignmentDetailPage({
             {submissionCount} submission
             {submissionCount === 1 ? "" : "s"} so far.
           </p>
-          <div className="mt-3 flex gap-3">
+          <div className="mt-3 flex flex-wrap gap-3">
             <Link
               href={`/assignments/${id}/grade`}
               className="inline-block rounded-md bg-blue px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-sky"
@@ -258,7 +258,24 @@ export default async function AssignmentDetailPage({
                 Edit
               </Link>
             )}
+            {isExec && submissionCount === 0 && (
+              <form action={deleteAssignment.bind(null, id)}>
+                <ConfirmSubmitButton
+                  message="Delete this assignment for good? This can't be undone."
+                  pendingText="Deleting…"
+                  className="inline-block rounded-md border border-neg/40 px-5 py-2 text-sm font-medium text-neg transition-colors hover:bg-[#fdecea]"
+                >
+                  Delete
+                </ConfirmSubmitButton>
+              </form>
+            )}
           </div>
+          {isExec && submissionCount > 0 && (
+            <p className="mt-3 text-xs text-muted">
+              This assignment has submissions, so it can&rsquo;t be deleted — unpublish
+              it from Edit if you want to hide it while keeping students&rsquo; work.
+            </p>
+          )}
         </div>
       ) : (
         <div className="mt-10 border-t border-hair pt-8">

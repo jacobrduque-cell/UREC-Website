@@ -3,7 +3,8 @@ import { getCurrentCourse, getIsExec } from "@/lib/data/queries";
 import { renderMarkdown } from "@/lib/markdown";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { toggleWikiPublished } from "../actions";
+import { deleteWikiPage, toggleWikiPublished } from "../actions";
+import { ConfirmSubmitButton } from "../../ui/form-controls";
 
 type WikiPage = {
   id: string;
@@ -64,6 +65,15 @@ export default async function WikiPageDetail({
               >
                 {page.published ? "Unpublish" : "Publish"}
               </button>
+            </form>
+            <form action={deleteWikiPage.bind(null, page.slug)}>
+              <ConfirmSubmitButton
+                message="Delete this page for good? This can't be undone."
+                pendingText="Deleting…"
+                className="whitespace-nowrap rounded-md border border-neg/40 px-4 py-2 text-xs font-medium text-neg transition-colors hover:bg-[#fdecea]"
+              >
+                Delete
+              </ConfirmSubmitButton>
             </form>
           </div>
         )}
