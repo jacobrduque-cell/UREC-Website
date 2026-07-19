@@ -69,9 +69,13 @@ export default async function AssignmentsPage({
   // assignments that embed materialized thousands of rows on every page
   // load. Members get the fuller embed (RLS scopes it to just their own
   // and their group's rows, so it stays tiny) to render a status pill.
+  // Managers get submitted_at + a grade marker per submission so the list
+  // can show a "needs grading" badge. This adds columns, not rows (the
+  // submissions embed already materialized one row per submission for the
+  // count), so it stays a single query at the 115-member scale.
   const manageSelect = `id, title, points_possible, due_at, published, created_at,
            assignment_group:assignment_groups(name, position),
-           submissions(id)`;
+           submissions(id, submitted_at, grades(points_earned))`;
   const memberSelect = `id, title, points_possible, due_at, published, created_at,
            assignment_group:assignment_groups(name, position),
            submissions(id, submitted_at, grades(points_earned))`;
@@ -144,6 +148,12 @@ export default async function AssignmentsPage({
                 const sub = a.submissions[0];
                 const grade = oneOrFirst(sub?.grades)?.points_earned;
                 const submitted = a.submissions.length > 0;
+                // Manager view: how many submitted attempts still have no grade.
+                const needsGrading = canManage
+                  ? a.submissions.filter(
+                      (s) => s.submitted_at && oneOrFirst(s.grades)?.points_earned == null,
+                    ).length
+                  : 0;
                 const status = submissionStatus({
                   dueAt: a.due_at,
                   submittedAt: sub?.submitted_at,
@@ -188,8 +198,13 @@ export default async function AssignmentsPage({
                           </span>
                         </span>
                         {canManage ? (
-                          <span className="whitespace-nowrap text-sm text-muted">
-                            {a.submissions.length} submitted
+                          <span className="flex items-center gap-2 whitespace-nowrap text-sm">
+                            {needsGrading > 0 && (
+                              <span className="rounded-full bg-[#fff3e0] px-2 py-0.5 text-xs font-medium text-[#B4531A]">
+                                {needsGrading} to grade
+                              </span>
+                            )}
+                            <span className="text-muted">{a.submissions.length} submitted</span>
                           </span>
                         ) : (
                           <span className="flex items-center gap-2 whitespace-nowrap">

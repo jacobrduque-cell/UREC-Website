@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getIsExec, getIsGrader, getMyGroupIds, getSignedFileUrl, oneOrFirst } from "@/lib/data/queries";
 import { renderMarkdown } from "@/lib/markdown";
 import { SubmitButton, ConfirmSubmitButton } from "../../ui/form-controls";
+import { CopyLinkButton } from "../../ui/copy-link-button";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { addSubmissionComment, deleteAssignment, duplicateAssignment, submitAssignment } from "../actions";
@@ -279,6 +280,7 @@ export default async function AssignmentDetailPage({
                 </ConfirmSubmitButton>
               </form>
             )}
+            <CopyLinkButton className="inline-block rounded-md border border-hair px-5 py-2 text-sm font-medium text-text transition-colors hover:bg-[#eef7ff]" />
           </div>
           {isExec && submissionCount > 0 && (
             <p className="mt-3 text-xs text-muted">

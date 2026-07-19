@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createReply, deleteAnnouncement } from "../actions";
 import { ConfirmSubmitButton } from "../../ui/form-controls";
+import { CopyLinkButton } from "../../ui/copy-link-button";
 import { ReplyForm } from "../reply-form";
 
 type Announcement = {
@@ -107,6 +108,7 @@ export default async function AnnouncementDetailPage({
               Delete
             </ConfirmSubmitButton>
           </form>
+          <CopyLinkButton className="text-xs font-medium text-blue hover:underline" />
         </div>
       )}
 

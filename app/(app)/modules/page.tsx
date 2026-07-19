@@ -6,9 +6,11 @@ import {
   createModule,
   deleteModule,
   deleteModuleItem,
+  moveModule,
+  moveModuleItem,
   toggleModulePublished,
 } from "./actions";
-import { ConfirmSubmitButton } from "../ui/form-controls";
+import { ConfirmSubmitButton, SubmitButton } from "../ui/form-controls";
 import { ModuleForm } from "./module-form";
 import { AddItemForm } from "./add-item-form";
 
@@ -96,7 +98,7 @@ export default async function ModulesPage() {
       </div>
 
       <div className="mt-6 flex flex-col gap-5">
-        {modules.map((m) => {
+        {modules.map((m, mi) => {
           const items = [...m.module_items].sort((a, b) => a.position - b.position);
           return (
             <details key={m.id} open className="overflow-hidden rounded-md border border-hair">
@@ -111,6 +113,12 @@ export default async function ModulesPage() {
                 </span>
                 {isExec && (
                   <span className="flex items-center gap-2">
+                    <ReorderButtons
+                      up={moveModule.bind(null, m.id, "up")}
+                      down={moveModule.bind(null, m.id, "down")}
+                      isFirst={mi === 0}
+                      isLast={mi === modules.length - 1}
+                    />
                     <form action={toggleModulePublished.bind(null, m.id, m.published)}>
                       <button className="rounded-md border border-hair px-2.5 py-1 text-xs font-medium text-text transition-colors hover:bg-white">
                         {m.published ? "Unpublish" : "Publish"}
@@ -129,13 +137,24 @@ export default async function ModulesPage() {
               </summary>
 
               <ul className="divide-y divide-hair">
-                {items.map((item) => {
+                {items.map((item, ii) => {
                   const href = itemHref(item);
+                  const controls = isExec && (
+                    <span className="flex flex-shrink-0 items-center gap-1.5">
+                      <ReorderButtons
+                        up={moveModuleItem.bind(null, item.id, "up")}
+                        down={moveModuleItem.bind(null, item.id, "down")}
+                        isFirst={ii === 0}
+                        isLast={ii === items.length - 1}
+                      />
+                      <DeleteItemBtn itemId={item.id} />
+                    </span>
+                  );
                   if (item.item_type === "header") {
                     return (
                       <li key={item.id} className="flex items-center justify-between gap-3 bg-white px-4 py-2.5">
                         <span className="text-sm font-bold text-navy-deep">{item.title}</span>
-                        {isExec && <DeleteItemBtn itemId={item.id} />}
+                        {controls}
                       </li>
                     );
                   }
@@ -161,7 +180,7 @@ export default async function ModulesPage() {
                           </span>
                         )}
                       </span>
-                      {isExec && <DeleteItemBtn itemId={item.id} />}
+                      {controls}
                     </li>
                   );
                 })}
@@ -193,6 +212,35 @@ export default async function ModulesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function ReorderButtons({
+  up,
+  down,
+  isFirst,
+  isLast,
+}: {
+  up: () => void | Promise<void>;
+  down: () => void | Promise<void>;
+  isFirst: boolean;
+  isLast: boolean;
+}) {
+  const cls =
+    "rounded border border-hair px-1.5 py-0.5 text-xs leading-none text-muted transition-colors hover:bg-white";
+  return (
+    <>
+      <form action={up}>
+        <SubmitButton pendingText="…" disabled={isFirst} title="Move up" className={cls}>
+          ↑
+        </SubmitButton>
+      </form>
+      <form action={down}>
+        <SubmitButton pendingText="…" disabled={isLast} title="Move down" className={cls}>
+          ↓
+        </SubmitButton>
+      </form>
+    </>
   );
 }
 

@@ -127,3 +127,76 @@ export async function deleteModuleItem(itemId: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/modules");
 }
+
+// Reorder a module among its course's modules by swapping positions with
+// the neighbor in the chosen direction. Positions are sequential+unique
+// (createModule increments from max), so a straight swap is enough. RLS
+// re-enforces exec on the writes.
+export async function moveModule(moduleId: string, direction: "up" | "down") {
+  const supabase = await createClient();
+  const { data: mod } = await supabase
+    .from("modules")
+    .select("course_id")
+    .eq("id", moduleId)
+    .maybeSingle();
+  if (!mod) return;
+
+  const { data: modules } = await supabase
+    .from("modules")
+    .select("id, position")
+    .eq("course_id", mod.course_id)
+    .order("position", { ascending: true });
+  const list = (modules ?? []) as { id: string; position: number }[];
+
+  const idx = list.findIndex((m) => m.id === moduleId);
+  if (idx === -1) return;
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= list.length) return;
+
+  const a = list[idx];
+  const b = list[swapIdx];
+  const { error: e1 } = await supabase.from("modules").update({ position: b.position }).eq("id", a.id);
+  if (e1) throw new Error(e1.message);
+  const { error: e2 } = await supabase.from("modules").update({ position: a.position }).eq("id", b.id);
+  if (e2) throw new Error(e2.message);
+
+  revalidatePath("/modules");
+}
+
+// Reorder an item within its module. Same swap approach as moveModule.
+export async function moveModuleItem(itemId: string, direction: "up" | "down") {
+  const supabase = await createClient();
+  const { data: item } = await supabase
+    .from("module_items")
+    .select("module_id")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (!item) return;
+
+  const { data: items } = await supabase
+    .from("module_items")
+    .select("id, position")
+    .eq("module_id", item.module_id)
+    .order("position", { ascending: true });
+  const list = (items ?? []) as { id: string; position: number }[];
+
+  const idx = list.findIndex((it) => it.id === itemId);
+  if (idx === -1) return;
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= list.length) return;
+
+  const a = list[idx];
+  const b = list[swapIdx];
+  const { error: e1 } = await supabase
+    .from("module_items")
+    .update({ position: b.position })
+    .eq("id", a.id);
+  if (e1) throw new Error(e1.message);
+  const { error: e2 } = await supabase
+    .from("module_items")
+    .update({ position: a.position })
+    .eq("id", b.id);
+  if (e2) throw new Error(e2.message);
+
+  revalidatePath("/modules");
+}
