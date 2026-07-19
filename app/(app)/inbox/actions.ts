@@ -57,6 +57,49 @@ export async function startConversation(formData: FormData) {
   redirect(`/inbox/${convo.id}`);
 }
 
+// Record that the current user has read `conversationId` up to now.
+// last_read_at ships in a separate migration (see
+// 20260717003400_conversation_read_state.sql); if the column isn't there
+// yet the update errors harmlessly and we swallow it — read tracking is a
+// nicety, never a reason to fail the request.
+export async function markConversationRead(conversationId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  try {
+    await supabase
+      .from("conversation_participants")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("conversation_id", conversationId)
+      .eq("user_id", user.id);
+  } catch {
+    // Column missing pre-migration (or any transient failure) — ignore.
+  }
+  revalidatePath("/inbox");
+}
+
+// Mark every conversation the current user participates in as read.
+export async function markAllConversationsRead() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  try {
+    await supabase
+      .from("conversation_participants")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("user_id", user.id);
+  } catch {
+    // Column missing pre-migration (or any transient failure) — ignore.
+  }
+  revalidatePath("/inbox");
+}
+
 export async function sendMessage(conversationId: string, formData: FormData) {
   const body = String(formData.get("body") ?? "").trim();
   if (!body) return;
@@ -90,6 +133,18 @@ export async function sendMessage(conversationId: string, formData: FormData) {
       relatedEntityType: "conversation",
       relatedEntityId: conversationId,
     });
+  }
+
+  // The sender has by definition seen the thread — mark it read for them.
+  // Guarded so a pre-migration missing column can't fail the send.
+  try {
+    await supabase
+      .from("conversation_participants")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("conversation_id", conversationId)
+      .eq("user_id", user.id);
+  } catch {
+    // Ignore — read tracking is best-effort.
   }
 
   revalidatePath(`/inbox/${conversationId}`);

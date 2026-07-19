@@ -5,11 +5,18 @@ import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import { PageCrumb } from "./page-crumb";
 import { isCourseRoute } from "./course-routes";
+import { QuickCreate } from "./ui/quick-create";
 
 // The course breadcrumb header (hamburger + course name + page crumb).
 // Only shown inside a course; the Dashboard/admin pages have no header
 // bar, just the blue rail + content.
-export function CourseTopBar({ courseLabel }: { courseLabel: string }) {
+export function CourseTopBar({
+  courseLabel,
+  isExec,
+}: {
+  courseLabel: string;
+  isExec: boolean;
+}) {
   const pathname = usePathname() ?? "";
   if (!isCourseRoute(pathname)) return null;
 
@@ -28,15 +35,18 @@ export function CourseTopBar({ courseLabel }: { courseLabel: string }) {
         </Link>
         <PageCrumb />
       </nav>
-      <form action="/search" className="ml-auto hidden sm:block">
-        <input
-          type="search"
-          name="q"
-          placeholder="Search course…"
-          aria-label="Search course"
-          className="w-40 rounded-md border border-hair bg-white px-3 py-1.5 text-xs text-text outline-none transition-[width] focus:w-56 focus:border-blue"
-        />
-      </form>
+      <div className="ml-auto flex items-center gap-2">
+        <form action="/search" className="hidden sm:block">
+          <input
+            type="search"
+            name="q"
+            placeholder="Search course…"
+            aria-label="Search course"
+            className="w-40 rounded-md border border-hair bg-white px-3 py-1.5 text-xs text-text outline-none transition-[width] focus:w-56 focus:border-blue"
+          />
+        </form>
+        {isExec && <QuickCreate />}
+      </div>
     </header>
   );
 }

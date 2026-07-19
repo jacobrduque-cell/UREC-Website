@@ -132,7 +132,7 @@ export default async function AppLayout({
       <CourseSidebar term={term} />
 
       <div className="flex min-w-0 flex-1 flex-col bg-white">
-        <CourseTopBar courseLabel={courseLabel} />
+        <CourseTopBar courseLabel={courseLabel} isExec={isExec} />
         <main className="flex-1 bg-paper">{children}</main>
       </div>
     </div>

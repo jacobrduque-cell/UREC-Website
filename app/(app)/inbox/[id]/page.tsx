@@ -46,6 +46,22 @@ export default async function ConversationPage({
   if (!data) notFound();
 
   const convo = data as unknown as Conversation;
+
+  // Opening the thread marks it read for this viewer. Done inline (not via
+  // a server action) so we don't call revalidatePath during render. The
+  // last_read_at column ships in a separate migration
+  // (20260717003400_conversation_read_state.sql); if it isn't there yet the
+  // update fails and we ignore it — the thread still renders normally.
+  try {
+    await supabase
+      .from("conversation_participants")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("conversation_id", id)
+      .eq("user_id", user.id);
+  } catch {
+    // Column missing pre-migration (or any transient failure) — ignore.
+  }
+
   const byId = new Map(
     convo.conversation_participants
       .map((p) => p.user)

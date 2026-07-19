@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { addSubmissionComment, gradeSubmission } from "../../actions";
 import { Breadcrumbs } from "../../../ui/breadcrumbs";
+import { GradeKeyboardNav } from "./grade-keyboard-nav";
 
 type Grade = {
   points_earned: number;
@@ -34,10 +35,10 @@ export default async function GradeAssignmentPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ filter?: string; s?: string }>;
 }) {
   const { id } = await params;
-  const { filter } = await searchParams;
+  const { filter, s } = await searchParams;
   const ungradedOnly = filter === "ungraded";
   const supabase = await createClient();
 
@@ -84,11 +85,25 @@ export default async function GradeAssignmentPage({
     | undefined;
   const criteria = (rubric?.rubric_criteria ?? []).sort((a, b) => a.position - b.position);
 
-  // Sign every submission file in ONE batch. Signing per file (a fresh
-  // client + Storage round trip apiece) meant a 115-submission
-  // assignment fired 115+ sequential sign requests before the page could
-  // render.
-  const allPaths = visibleRows.flatMap((s) => s.submission_files.map((sf) => sf.file.storage_path));
+  // SpeedGrader-style stepping. `?s=all` opens the classic full list;
+  // otherwise `s` is an index into visibleRows (clamped), defaulting to the
+  // first ungraded submission so exec land on work that needs attention.
+  const len = visibleRows.length;
+  const viewAll = s === "all";
+  const firstUngradedIdx = visibleRows.findIndex((r) => oneOrFirst(r.grades) == null);
+  const defaultIdx = firstUngradedIdx >= 0 ? firstUngradedIdx : 0;
+  const parsedIdx = s != null && s !== "all" ? Number.parseInt(s, 10) : NaN;
+  const current = Number.isNaN(parsedIdx)
+    ? defaultIdx
+    : Math.min(Math.max(parsedIdx, 0), Math.max(len - 1, 0));
+  const currentRow = len > 0 ? visibleRows[current] : null;
+
+  // Sign only the submission files we'll actually render — every row in the
+  // full list, but just the current one when stepping — in ONE batch.
+  // (Signing per file meant a 115-submission assignment fired 115+
+  // sequential Storage round trips before the page could render.)
+  const rowsToSign = viewAll ? visibleRows : currentRow ? [currentRow] : [];
+  const allPaths = rowsToSign.flatMap((s) => s.submission_files.map((sf) => sf.file.storage_path));
   const signedUrlByPath = new Map<string, string>();
   if (allPaths.length > 0) {
     const { data: signed } = await supabase.storage
@@ -98,6 +113,25 @@ export default async function GradeAssignmentPage({
       if (entry.path && entry.signedUrl) signedUrlByPath.set(entry.path, entry.signedUrl);
     }
   }
+
+  const buildHref = (sVal: string | number) => {
+    const p = new URLSearchParams();
+    if (ungradedOnly) p.set("filter", "ungraded");
+    p.set("s", String(sVal));
+    return `/assignments/${id}/grade?${p.toString()}`;
+  };
+
+  const prevHref = current > 0 ? buildHref(current - 1) : null;
+  const nextHref = current < len - 1 ? buildHref(current + 1) : null;
+  const nextUngradedIdx = visibleRows.findIndex(
+    (r, i) => i > current && oneOrFirst(r.grades) == null,
+  );
+  const currentName = currentRow
+    ? currentRow.group
+      ? `Team: ${currentRow.group.name}`
+      : (currentRow.user?.full_name ?? currentRow.user?.email ?? "Unknown")
+    : "";
+  const currentGraded = currentRow ? oneOrFirst(currentRow.grades) != null : false;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
@@ -132,25 +166,106 @@ export default async function GradeAssignmentPage({
         </Link>
       </div>
 
-      <ul className="mt-6 flex flex-col gap-5">
-        {visibleRows.map((s) => (
-          <SubmissionCard
-            key={s.id}
-            submission={s}
-            assignmentId={id}
-            pointsPossible={assignment.points_possible}
-            criteria={criteria}
-            signedUrlByPath={signedUrlByPath}
-          />
-        ))}
-        {visibleRows.length === 0 && (
+      {len === 0 ? (
+        <ul className="mt-6 flex flex-col gap-5">
           <li className="text-sm text-muted">
             {ungradedOnly && rows.length > 0
               ? "Everything's graded. 🎉"
               : "No submissions yet."}
           </li>
-        )}
-      </ul>
+        </ul>
+      ) : viewAll ? (
+        <>
+          <div className="mt-4">
+            <Link
+              href={buildHref(defaultIdx)}
+              className="rounded-md border border-hair px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-[#eef7ff]"
+            >
+              Step one at a time
+            </Link>
+          </div>
+          <ul className="mt-6 flex flex-col gap-5">
+            {visibleRows.map((s) => (
+              <SubmissionCard
+                key={s.id}
+                submission={s}
+                assignmentId={id}
+                pointsPossible={assignment.points_possible}
+                criteria={criteria}
+                signedUrlByPath={signedUrlByPath}
+              />
+            ))}
+          </ul>
+        </>
+      ) : (
+        <div className="mt-6 flex flex-col gap-5">
+          <GradeKeyboardNav prevHref={prevHref} nextHref={nextHref} />
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-hair bg-white px-4 py-3">
+            <div className="flex items-center gap-2">
+              {prevHref ? (
+                <Link
+                  href={prevHref}
+                  className="rounded-md border border-hair px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-[#eef7ff]"
+                >
+                  &larr; Prev
+                </Link>
+              ) : (
+                <span className="rounded-md border border-hair px-3 py-1.5 text-sm font-medium text-text opacity-60">
+                  &larr; Prev
+                </span>
+              )}
+              {nextHref ? (
+                <Link
+                  href={nextHref}
+                  className="rounded-md border border-hair px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-[#eef7ff]"
+                >
+                  Next &rarr;
+                </Link>
+              ) : (
+                <span className="rounded-md border border-hair px-3 py-1.5 text-sm font-medium text-text opacity-60">
+                  Next &rarr;
+                </span>
+              )}
+            </div>
+            <div className="min-w-0 text-center">
+              <p className="text-sm font-medium text-navy-deep">
+                Submission {current + 1} of {len}
+              </p>
+              <p className="mt-0.5 truncate text-xs text-muted">
+                {currentName} &middot; {currentGraded ? "Graded" : "Ungraded"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {nextUngradedIdx >= 0 && (
+                <Link
+                  href={buildHref(nextUngradedIdx)}
+                  className="rounded-md border border-hair px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-[#eef7ff]"
+                >
+                  Next ungraded
+                </Link>
+              )}
+              <Link
+                href={buildHref("all")}
+                className="rounded-md border border-hair px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-[#eef7ff]"
+              >
+                View all
+              </Link>
+            </div>
+          </div>
+          <ul className="flex flex-col gap-5">
+            {currentRow && (
+              <SubmissionCard
+                key={currentRow.id}
+                submission={currentRow}
+                assignmentId={id}
+                pointsPossible={assignment.points_possible}
+                criteria={criteria}
+                signedUrlByPath={signedUrlByPath}
+              />
+            )}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
