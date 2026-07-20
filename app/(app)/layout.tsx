@@ -1,11 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentCourse, getCurrentProfile, getIsExec } from "@/lib/data/queries";
+import { getCurrentCourse, getCurrentProfile, getIsRealExec, isStudentView } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { LayoutGrid, Bell, Mail, Settings } from "lucide-react";
+import { LayoutGrid, Bell, Mail, Settings, GraduationCap } from "lucide-react";
 import { CourseSidebar } from "./course-sidebar";
 import { CourseTopBar } from "./course-topbar";
+import { enterStudentView, exitStudentView } from "./student-view-actions";
 
 function initials(name: string | null | undefined, email: string | undefined) {
   if (name) {
@@ -61,16 +62,20 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  const [profile, course, isExec, { count: unreadCount }] = await Promise.all([
+  const [profile, course, realExec, studentView, { count: unreadCount }] = await Promise.all([
     getCurrentProfile(),
     getCurrentCourse(),
-    getIsExec(),
+    getIsRealExec(),
+    isStudentView(),
     supabase
       .from("notifications")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
       .is("read_at", null),
   ]);
+  // While "viewing as a student" the app treats them as a member everywhere
+  // (nav, submit boxes, quizzes) — realExec still gates the view toggle.
+  const isExec = realExec && !studentView;
 
   const term = (course as { term?: { name?: string } } | null)?.term?.name ?? "Current Term";
   const courseLabel = course?.code
@@ -119,6 +124,18 @@ export default async function AppLayout({
         </div>
 
         <div className="mt-auto flex w-full flex-col items-center gap-1.5 pt-3">
+          {realExec && !studentView && (
+            <form action={enterStudentView} className="w-full">
+              <button
+                type="submit"
+                title="See the app exactly as a member does — you can submit too"
+                className="flex w-full flex-col items-center gap-1 px-1 py-2 text-[10px] font-ui leading-tight text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <GraduationCap className="h-5 w-5" strokeWidth={1.75} />
+                Student view
+              </button>
+            </form>
+          )}
           <div
             className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/70 bg-blue text-xs font-bold text-white"
             title={profile?.full_name ?? user.email}
@@ -142,6 +159,22 @@ export default async function AppLayout({
       <CourseSidebar term={term} />
 
       <div className="flex min-w-0 flex-1 flex-col bg-white">
+        {realExec && studentView && (
+          <div className="flex items-center justify-between gap-3 border-b border-[#B4531A]/20 bg-[#fff3e0] px-5 py-2 text-sm text-[#B4531A]">
+            <span className="flex items-center gap-2 font-medium">
+              <GraduationCap className="h-4 w-4" strokeWidth={2} />
+              Viewing as a student — you see and submit exactly what a member does.
+            </span>
+            <form action={exitStudentView}>
+              <button
+                type="submit"
+                className="whitespace-nowrap rounded-md bg-[#B4531A] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#9a4517]"
+              >
+                Return to exec
+              </button>
+            </form>
+          </div>
+        )}
         <CourseTopBar courseLabel={courseLabel} isExec={isExec} />
         <main className="flex-1 bg-paper">{children}</main>
       </div>

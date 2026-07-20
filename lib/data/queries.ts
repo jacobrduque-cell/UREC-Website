@@ -21,11 +21,32 @@ export function oneOrFirst<T>(value: T | T[] | null | undefined): T | undefined 
  * called via RPC instead of reimplementing the role logic in TypeScript.
  * One source of truth for "is this user exec."
  */
-export async function getIsExec(): Promise<boolean> {
+export const STUDENT_VIEW_COOKIE = "urec_student_view";
+
+/**
+ * "View as student": an exec can flip a cookie to experience the whole app
+ * exactly as a member does — student dashboard, submit boxes, takeable
+ * quizzes — and actually submit. It only downgrades the APP-LAYER role
+ * checks below; the database still knows they're exec (RLS is unchanged),
+ * so their reads and writes still work and they can always switch back
+ * (no lock-out). isRealExec ignores the cookie — use it only to decide
+ * whether to show the "view as student" / "return to exec" controls.
+ */
+export async function isStudentView(): Promise<boolean> {
+  const cookieStore = await cookies();
+  return cookieStore.get(STUDENT_VIEW_COOKIE)?.value === "1";
+}
+
+export async function getIsRealExec(): Promise<boolean> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("is_exec");
   if (error) return false;
   return Boolean(data);
+}
+
+export async function getIsExec(): Promise<boolean> {
+  if (await isStudentView()) return false;
+  return getIsRealExec();
 }
 
 export async function getIsEnrolled(courseId: string): Promise<boolean> {
@@ -39,6 +60,7 @@ export async function getIsEnrolled(courseId: string): Promise<boolean> {
 
 /** Grader tier (Phase 6): can grade/view all submissions for a course without full exec power. */
 export async function getIsGrader(courseId: string): Promise<boolean> {
+  if (await isStudentView()) return false; // exec previewing as a student
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("is_grader", {
     target_course_id: courseId,
