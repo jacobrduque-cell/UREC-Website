@@ -12,10 +12,12 @@ export function QuizSettingsForm({
   action,
   shuffleQuestions,
   showCorrectAfter,
+  proctored,
 }: {
   action: (prev: { error?: string }, formData: FormData) => Promise<{ error?: string }>;
   shuffleQuestions: boolean;
   showCorrectAfter: boolean;
+  proctored: boolean;
 }) {
   const [state, formAction] = useActionState(action, {});
 
@@ -24,11 +26,22 @@ export function QuizSettingsForm({
       <FormError error={state?.error} />
       <label className="flex items-center gap-2 text-sm text-text">
         <input type="checkbox" name="shuffle_questions" defaultChecked={shuffleQuestions} className="h-4 w-4" />
-        Shuffle question order for each member
+        Shuffle question <em>and</em> answer order for each member
       </label>
       <label className="flex items-center gap-2 text-sm text-text">
         <input type="checkbox" name="show_correct_after" defaultChecked={showCorrectAfter} className="h-4 w-4" />
         Show correct answers &amp; explanations after a member submits
+      </label>
+      <label className="flex items-start gap-2 text-sm text-text">
+        <input type="checkbox" name="proctored" defaultChecked={proctored} className="mt-0.5 h-4 w-4" />
+        <span>
+          Integrity mode
+          <span className="mt-0.5 block text-xs text-muted">
+            Runs the quiz in fullscreen, records if a member leaves the tab or
+            exits fullscreen (shown to you on Submissions), and blocks
+            copy/paste. Detects &amp; deters — it can&rsquo;t fully prevent.
+          </span>
+        </span>
       </label>
       <SubmitButton
         pendingText="Saving…"

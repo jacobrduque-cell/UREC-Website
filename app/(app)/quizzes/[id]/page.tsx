@@ -15,6 +15,7 @@ import {
 } from "../actions";
 import { AddQuestionForm } from "../add-question-form";
 import { QuizSettingsForm } from "./quiz-settings-form";
+import { QuizProctor } from "./quiz-proctor";
 import { ConfirmSubmitButton, SubmitButton } from "../../ui/form-controls";
 import { PreviewBanner } from "../../ui/preview-banner";
 import { Breadcrumbs } from "../../ui/breadcrumbs";
@@ -119,7 +120,7 @@ export default async function QuizDetailPage({
 
   const { data: quiz } = await supabase
     .from("quizzes")
-    .select("id, title, description, published, shuffle_questions, show_correct_after")
+    .select("id, title, description, published, shuffle_questions, show_correct_after, proctored")
     .eq("id", id)
     .maybeSingle();
   if (!quiz) notFound();
@@ -202,9 +203,18 @@ export default async function QuizDetailPage({
     for (const r of (rev ?? []) as ReviewRow[]) reviewByQ.set(r.question_id, r);
     for (const r of (resp ?? []) as ResponseRow[]) respByQ.set(r.question_id, r);
   }
-  const takeOrder = quiz.shuffle_questions
+  const orderedQuestions = quiz.shuffle_questions
     ? seededShuffle(questions, `${user.id}:${id}`)
     : questions;
+  // Shuffle each question's answer OPTIONS too when shuffling is on (seeded
+  // per user+question) so a neighbor's option order is useless; otherwise
+  // keep the authored order by position.
+  const takeOrder = orderedQuestions.map((q) => ({
+    ...q,
+    quiz_answers: quiz.shuffle_questions
+      ? seededShuffle(q.quiz_answers, `${user.id}:${id}:${q.id}`)
+      : [...q.quiz_answers].sort((a, b) => a.position - b.position),
+  }));
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-10">
@@ -286,6 +296,7 @@ export default async function QuizDetailPage({
               action={updateQuizSettings.bind(null, id)}
               shuffleQuestions={quiz.shuffle_questions}
               showCorrectAfter={quiz.show_correct_after}
+              proctored={quiz.proctored}
             />
           </details>
           <ul className="flex flex-col gap-4">
@@ -432,25 +443,38 @@ export default async function QuizDetailPage({
           )}
         </div>
       ) : (
-        /* Student — take the quiz */
-        <form action={submitQuiz.bind(null, id)} className="mt-8 flex flex-col gap-6">
-          {takeOrder.map((q, i) => (
-            <TakeQuestion key={q.id} question={q} index={i} />
-          ))}
-          {questions.length > 0 ? (
-            <button
-              type="submit"
-              className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
-            >
-              Submit Quiz
-            </button>
-          ) : (
-            <p className="text-sm text-muted">This quiz has no questions yet.</p>
-          )}
-        </form>
+        /* Student — take the quiz. A proctored quiz wraps the form in the
+           fullscreen/focus-detection guard; otherwise it renders plainly.
+           Either way the hidden focus_loss_count travels with the form. */
+        <TakeQuiz
+          form={
+            <form action={submitQuiz.bind(null, id)} className="flex flex-col gap-6">
+              <input type="hidden" name="focus_loss_count" defaultValue={0} />
+              {takeOrder.map((q, i) => (
+                <TakeQuestion key={q.id} question={q} index={i} />
+              ))}
+              {questions.length > 0 ? (
+                <button
+                  type="submit"
+                  className="self-start rounded-md bg-blue px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky"
+                >
+                  Submit Quiz
+                </button>
+              ) : (
+                <p className="text-sm text-muted">This quiz has no questions yet.</p>
+              )}
+            </form>
+          }
+          proctored={quiz.proctored && questions.length > 0}
+        />
       )}
     </div>
   );
+}
+
+function TakeQuiz({ form, proctored }: { form: React.ReactNode; proctored: boolean }) {
+  if (proctored) return <QuizProctor>{form}</QuizProctor>;
+  return <div className="mt-8">{form}</div>;
 }
 
 // One quiz question rendered as its take-quiz input(s). `disabled` powers
@@ -477,7 +501,7 @@ function TakeQuestion({
       </div>
       <div className="mt-3 flex flex-col gap-2">
         {q.question_type === "multiple_choice" || q.question_type === "true_false" ? (
-          [...q.quiz_answers].sort((a, b) => a.position - b.position).map((a) => (
+          q.quiz_answers.map((a) => (
             <label
               key={a.id}
               className={`flex items-center gap-2 text-sm text-text ${disabledCls}`}
@@ -493,7 +517,7 @@ function TakeQuestion({
             </label>
           ))
         ) : q.question_type === "multiple_answer" ? (
-          [...q.quiz_answers].sort((a, b) => a.position - b.position).map((a) => (
+          q.quiz_answers.map((a) => (
             <label
               key={a.id}
               className={`flex items-center gap-2 text-sm text-text ${disabledCls}`}

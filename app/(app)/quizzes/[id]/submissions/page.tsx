@@ -23,6 +23,7 @@ type Submission = {
   id: string;
   score: number | null;
   submitted_at: string | null;
+  focus_loss_count: number | null;
   user: { full_name: string | null; email: string } | null;
   quiz_responses: Response[];
 };
@@ -55,7 +56,7 @@ export default async function QuizSubmissionsPage({
     supabase
       .from("quiz_submissions")
       .select(
-        "id, score, submitted_at, user:users(full_name, email), quiz_responses(id, question_id, response_text, is_correct, points_awarded)",
+        "id, score, submitted_at, focus_loss_count, user:users(full_name, email), quiz_responses(id, question_id, response_text, is_correct, points_awarded)",
       )
       .eq("quiz_id", id)
       .order("submitted_at", { ascending: false }),
@@ -92,8 +93,16 @@ export default async function QuizSubmissionsPage({
           return (
             <li key={s.id} className="rounded-md border border-hair bg-white p-5">
               <div className="flex items-center justify-between gap-4">
-                <p className="text-sm font-medium text-text">
+                <p className="flex items-center gap-2 text-sm font-medium text-text">
                   {s.user?.full_name ?? s.user?.email ?? "Unknown"}
+                  {(s.focus_loss_count ?? 0) > 0 && (
+                    <span
+                      title="Times this member left the quiz tab or exited fullscreen during a proctored attempt. A soft signal — a reason to look closer, not proof."
+                      className="whitespace-nowrap rounded-full bg-[#fff3e0] px-2 py-0.5 text-[11px] font-semibold text-[#B4531A]"
+                    >
+                      ⚠ left quiz {s.focus_loss_count}×
+                    </span>
+                  )}
                 </p>
                 <span className="rounded-full border border-navy px-3 py-1 text-xs font-medium text-navy">
                   {s.score ?? 0}/{totalPts}

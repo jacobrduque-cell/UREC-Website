@@ -162,6 +162,7 @@ export async function updateQuizSettings(
       .update({
         shuffle_questions: formData.get("shuffle_questions") === "on",
         show_correct_after: formData.get("show_correct_after") === "on",
+        proctored: formData.get("proctored") === "on",
       })
       .eq("id", quizId);
     if (error) return { error: error.message };
@@ -393,10 +394,22 @@ export async function submitQuiz(quizId: string, formData: FormData) {
     .select("id, question_type, points, quiz_answers(id, is_correct, answer_text, tolerance)")
     .eq("quiz_id", quizId);
 
+  // Client-reported integrity signal for proctored quizzes: how many times
+  // the taker left the tab / exited fullscreen. Soft (DOM-editable), so we
+  // just clamp it to a sane non-negative integer and store it for exec.
+  const rawFocus = Number(formData.get("focus_loss_count"));
+  const focusLossCount =
+    Number.isFinite(rawFocus) && rawFocus > 0 ? Math.min(Math.floor(rawFocus), 999) : 0;
+
   const { data: submission, error: sErr } = await admin
     .from("quiz_submissions")
     .upsert(
-      { quiz_id: quizId, user_id: user.id, submitted_at: new Date().toISOString() },
+      {
+        quiz_id: quizId,
+        user_id: user.id,
+        submitted_at: new Date().toISOString(),
+        focus_loss_count: focusLossCount,
+      },
       { onConflict: "quiz_id,user_id" },
     )
     .select("id")
