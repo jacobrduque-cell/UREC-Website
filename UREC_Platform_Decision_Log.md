@@ -1,9 +1,11 @@
 # UREC Platform — Design & Build Decision Log
 
-Last updated: Tuesday, July 7, 2026
+Last updated: Wednesday, July 22, 2026
 Owner: Jacob Duque
-Co-owner: Lauren Chen (once onboarded)
+Co-owner: Lauren Chee
 Purpose: Track every architectural decision made during platform build so future co-presidents can understand why things are the way they are.
+
+> **Status note (2026-07-22):** The platform is BUILT and LIVE (Phases 0–10 done). This log records the original *decisions*; for current build state see `PROJECT_STATE.md`, and for account ownership/credentials see `OWNERSHIP.md`.
 
 ## Decision-making framework
 
@@ -26,11 +28,13 @@ Status: Locked in.
 
 ### D2: Ownership & succession model
 
-Decision: All accounts (Google Cloud, Vercel, Supabase, domain registrar) owned by a shared UREC Gmail (urecberkeley@gmail.com or similar). Jacob and Lauren both have credentials. Credentials stored in exec-only Google Drive doc. Rotated on each co-president handoff.
+Decision: All accounts (Google Cloud, Vercel, Supabase, domain registrar) owned by the UREC Berkeley Google account, never a personal account. Both co-presidents have credentials. Credentials recorded in `OWNERSHIP.md` (locations only — no secret values in git). Rotated on each co-president handoff.
 
 Reasoning: Prevents platform from dying when a co-president graduates. Standard practice for institutional continuity.
 
-Status: Pending Phase 0 setup.
+Status: **DONE (2026-07-22).** Supabase project + Vercel deployment + Google Cloud OAuth are live under the UREC Berkeley account (`urec@berkeley.edu` — confirm exact address). See `OWNERSHIP.md`.
+- Remaining sub-item: verify both co-presidents (Jacob + Lauren) have login access, and rotate on handoff.
+- Still open (tracked separately): a custom domain — the app currently runs on its Vercel URL. See D-domain / PROJECT_STATE.md "Open items."
 
 ### D3: Structural questions
 
@@ -85,14 +89,14 @@ Reasoning: These add complexity for capabilities UREC will never use.
 
 ## Part 4 — Build phases
 
-### Phase 0 — Foundation (~2 hours of Jacob's time)
+### Phase 0 — Foundation (~2 hours of Jacob's time) — ✅ DONE (2026-07-22)
 
-- Create shared UREC Gmail
-- Buy domain (urecberkeley.com or similar)
-- Create Supabase project
-- Create Vercel account
-- Configure Google Cloud OAuth
-- All under shared Gmail account
+- ✅ UREC Berkeley Google account owns everything (`urec@berkeley.edu`)
+- ⬜ Custom domain — still open; app runs on its Vercel URL for now (tracked in PROJECT_STATE.md "Open items")
+- ✅ Supabase project created (project ref `srbzcyhvbahrinievddd`) and schema applied
+- ✅ Vercel account + deployment live (deploys from `main`)
+- ✅ Google Cloud OAuth configured (Google SSO gated to `@berkeley.edu`)
+- ✅ All under the UREC Berkeley account
 
 ### Phase 1 — Auth + shell + schema (~4 hours + database setup)
 
