@@ -1,7 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getIsExec, getIsGrader, oneOrFirst } from "@/lib/data/queries";
 import { submissionStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/submission-status";
-import { overallPercent } from "@/lib/grade-weighting";
+import {
+  buildCategories,
+  categoriesToTotal,
+  ATTENDED_STATUSES,
+  type GroupMeta,
+  type ItemScore,
+  type AttendanceScore,
+} from "@/lib/grade-model";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -23,7 +30,6 @@ type AssignmentCol = {
   points_possible: number;
   due_at: string | null;
   assignment_group_id: string | null;
-  assignment_group: { weight_pct: number } | null;
 };
 
 // The exec/grader gradebook: a students × assignments matrix. RLS
@@ -37,21 +43,79 @@ export default async function GradebookPage() {
   if (!isExec && !isGrader) redirect("/grades");
 
   const supabase = await createClient();
-  const [{ data: enrollData }, { data: assignData }] = await Promise.all([
+  const [{ data: enrollData }, { data: assignData }, { data: groupData }] = await Promise.all([
     supabase
       .from("enrollments")
       .select("role:roles(name), user:users(id, full_name, email)")
       .eq("course_id", course.id),
     supabase
       .from("assignments")
-      .select("id, title, points_possible, due_at, assignment_group_id, assignment_group:assignment_groups(weight_pct)")
+      .select("id, title, points_possible, due_at, assignment_group_id")
       .eq("course_id", course.id)
       .eq("published", true)
       .order("due_at", { ascending: true, nullsFirst: false }),
+    supabase
+      .from("assignment_groups")
+      .select("id, name, weight_pct, position, kind")
+      .eq("course_id", course.id)
+      .order("position", { ascending: true }),
   ]);
 
   const assignments = (assignData ?? []) as unknown as AssignmentCol[];
   const assignmentIds = assignments.map((a) => a.id);
+  const groups: GroupMeta[] = (
+    (groupData ?? []) as { id: string; name: string; weight_pct: number; position: number; kind: string | null }[]
+  ).map((g) => ({
+    id: g.id,
+    name: g.name,
+    weight: Number(g.weight_pct),
+    position: g.position,
+    kind: g.kind === "attendance" ? "attendance" : "standard",
+  }));
+
+  // Quizzes assigned to a category count toward the grade. Their possible
+  // points are the sum of their questions' points. Scores come from
+  // quiz_submissions (exec RLS returns the whole course).
+  const { data: quizData } = await supabase
+    .from("quizzes")
+    .select("id, assignment_group_id")
+    .eq("course_id", course.id)
+    .eq("published", true)
+    .not("assignment_group_id", "is", null);
+  const quizzes = (quizData ?? []) as { id: string; assignment_group_id: string | null }[];
+  const quizIds = quizzes.map((q) => q.id);
+
+  const [{ data: qQ }, { data: qSub }, { data: attData }] = await Promise.all([
+    quizIds.length
+      ? supabase.from("quiz_questions").select("quiz_id, points").in("quiz_id", quizIds)
+      : Promise.resolve({ data: [] }),
+    quizIds.length
+      ? supabase.from("quiz_submissions").select("quiz_id, user_id, score").in("quiz_id", quizIds)
+      : Promise.resolve({ data: [] }),
+    supabase
+      .from("attendance_records")
+      .select("user_id, status, event:calendar_events!inner(course_id)")
+      .eq("event.course_id", course.id),
+  ]);
+
+  // quiz_id → total possible points
+  const quizPossible = new Map<string, number>();
+  for (const q of (qQ ?? []) as { quiz_id: string; points: number }[]) {
+    quizPossible.set(q.quiz_id, (quizPossible.get(q.quiz_id) ?? 0) + Number(q.points));
+  }
+  // `${quizId}:${userId}` → score
+  const quizScore = new Map<string, number>();
+  for (const s of (qSub ?? []) as { quiz_id: string; user_id: string; score: number | null }[]) {
+    if (s.score != null) quizScore.set(`${s.quiz_id}:${s.user_id}`, Number(s.score));
+  }
+  // user_id → attendance tally (attended ÷ recorded sessions)
+  const attendanceByUser = new Map<string, AttendanceScore>();
+  for (const r of (attData ?? []) as { user_id: string; status: string }[]) {
+    const a = attendanceByUser.get(r.user_id) ?? { attended: 0, held: 0 };
+    a.held += 1;
+    if (ATTENDED_STATUSES.has(r.status)) a.attended += 1;
+    attendanceByUser.set(r.user_id, a);
+  }
 
   // All submissions for these assignments (exec/grader RLS returns the
   // whole course). Individual submissions key by user; group submissions
@@ -98,24 +162,27 @@ export default async function GradebookPage() {
       (a.user!.full_name ?? a.user!.email).localeCompare(b.user!.full_name ?? b.user!.email),
     );
 
-  // Per-student running total, weighted by assignment-group weight_pct —
-  // the SAME calculation the student /grades page uses (shared helper), so
-  // the two views never disagree.
+  // Per-student running total — the SAME calculation the student /grades
+  // page uses (shared buildCategories helper), so the two views never
+  // disagree. Includes assignments, category-assigned quizzes, and the
+  // attendance category.
   function studentTotal(uid: string) {
-    const byCategory = new Map<string, { weight: number; earned: number; possible: number }>();
+    const items: ItemScore[] = [];
     for (const a of assignments) {
       const c = cell.get(`${a.id}:${uid}`);
       if (!c || c.grade == null) continue;
-      const weight = oneOrFirst(a.assignment_group)?.weight_pct ?? 0;
-      // Key by the group's identity (ungrouped pooled under "none"), so two
-      // distinct categories that happen to share a weight stay separate.
-      const key = a.assignment_group_id ?? "none";
-      if (!byCategory.has(key)) byCategory.set(key, { weight, earned: 0, possible: 0 });
-      const cat = byCategory.get(key)!;
-      cat.earned += c.grade;
-      cat.possible += a.points_possible;
+      items.push({ groupId: a.assignment_group_id, earned: c.grade, possible: a.points_possible });
     }
-    return overallPercent([...byCategory.values()]);
+    for (const q of quizzes) {
+      const score = quizScore.get(`${q.id}:${uid}`);
+      if (score == null) continue;
+      items.push({
+        groupId: q.assignment_group_id,
+        earned: score,
+        possible: quizPossible.get(q.id) ?? 0,
+      });
+    }
+    return categoriesToTotal(buildCategories(groups, items, attendanceByUser.get(uid)));
   }
 
   return (
@@ -129,12 +196,22 @@ export default async function GradebookPage() {
               {assignments.length} published assignment{assignments.length === 1 ? "" : "s"}
             </p>
           </div>
-          <Link
-            href="/grades"
-            className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
-          >
-            My Grades
-          </Link>
+          <div className="flex flex-shrink-0 gap-2">
+            {isExec && (
+              <Link
+                href="/grades/weights"
+                className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
+              >
+                Grade weights
+              </Link>
+            )}
+            <Link
+              href="/grades"
+              className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
+            >
+              My Grades
+            </Link>
+          </div>
         </div>
       </div>
 

@@ -156,6 +156,7 @@ export async function updateQuizSettings(
   formData: FormData,
 ): Promise<{ error?: string }> {
   try {
+    const rawGroup = String(formData.get("assignment_group_id") ?? "");
     const supabase = await createClient();
     const { error } = await supabase
       .from("quizzes")
@@ -163,6 +164,8 @@ export async function updateQuizSettings(
         shuffle_questions: formData.get("shuffle_questions") === "on",
         show_correct_after: formData.get("show_correct_after") === "on",
         proctored: formData.get("proctored") === "on",
+        // "" → null: an unassigned quiz doesn't count toward the grade.
+        assignment_group_id: rawGroup || null,
       })
       .eq("id", quizId);
     if (error) return { error: error.message };
@@ -171,6 +174,9 @@ export async function updateQuizSettings(
   }
 
   revalidatePath(`/quizzes/${quizId}`);
+  // Category assignment changes the weighted grade, so refresh both views.
+  revalidatePath("/grades");
+  revalidatePath("/grades/gradebook");
   return {};
 }
 
