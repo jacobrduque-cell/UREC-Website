@@ -1,6 +1,16 @@
 # UREC Platform
 
-Digital platform for the UC Berkeley Undergraduate Real Estate Club (UREC). Two products live under one roof: a **Deal Library** (interactive CRE case studies) and a **Member Workspace** (a course-style hub modeled on Canvas/bCourses). The goal is a real, succession-proof platform that survives leadership transitions, with a real backend replacing the current browser-only prototypes.
+Digital platform for the UC Berkeley Undergraduate Real Estate Club (UREC). Two products live under one roof: a **Deal Library** (interactive CRE case studies) and a **Member Workspace** (a course-style hub modeled on Canvas/bCourses). The goal is a real, succession-proof platform that survives leadership transitions.
+
+## ⚠️ Current status — READ FIRST (updated 2026-07-22)
+
+**The backend is BUILT and LIVE. This is no longer a prototype.** The Next.js + Supabase app in this repo is the real platform — 65+ commits, 37 database migrations, a live Supabase project, and Vercel deployment. Phase 0 (accounts) and Phases 1–10 are done.
+
+- The live product is the Next.js app under `app/`, `lib/`, `supabase/`. Treat any `*_prototype.html` files as historical, not the product.
+- **`PROJECT_STATE.md` is the single source of truth** for what's built, what's live, and what's next. Read it before anything else.
+- **`OWNERSHIP.md`** records who owns the accounts and where credentials live (no secrets in git).
+- The accounts/credentials are real and set up (see OWNERSHIP.md). If a fresh clone has no `.env.local`, that's because it's git-ignored — **not** because the accounts don't exist. Do not conclude "Phase 0 isn't done" from a missing env file.
+- Details lower in this file and in the decision log predate the build and may be stale (old color palette, "backend being built," placeholder rosters). PROJECT_STATE.md wins on any conflict.
 
 ## Governance and continuity (important, do not break)
 
