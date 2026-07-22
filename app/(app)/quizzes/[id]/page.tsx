@@ -120,10 +120,23 @@ export default async function QuizDetailPage({
 
   const { data: quiz } = await supabase
     .from("quizzes")
-    .select("id, title, description, published, shuffle_questions, show_correct_after, proctored")
+    .select("id, title, description, published, shuffle_questions, show_correct_after, proctored, course_id, assignment_group_id")
     .eq("id", id)
     .maybeSingle();
   if (!quiz) notFound();
+
+  // Standard grade categories for this course, so exec can point the quiz
+  // at one from its settings (attendance categories aren't itemizable).
+  let categories: { id: string; name: string }[] = [];
+  if (showAsExec) {
+    const { data: cats } = await supabase
+      .from("assignment_groups")
+      .select("id, name")
+      .eq("course_id", quiz.course_id)
+      .eq("kind", "standard")
+      .order("position", { ascending: true });
+    categories = (cats ?? []) as { id: string; name: string }[];
+  }
 
   // Exec-only: has anyone taken this quiz? Delete is offered only when no
   // attempts exist (deleting cascades them away).
@@ -297,6 +310,8 @@ export default async function QuizDetailPage({
               shuffleQuestions={quiz.shuffle_questions}
               showCorrectAfter={quiz.show_correct_after}
               proctored={quiz.proctored}
+              categories={categories}
+              assignmentGroupId={quiz.assignment_group_id}
             />
           </details>
           <ul className="flex flex-col gap-4">

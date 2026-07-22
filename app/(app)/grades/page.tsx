@@ -1,6 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCourse, getIsExec, getIsGrader, oneOrFirst } from "@/lib/data/queries";
-import { overallPercent } from "@/lib/grade-weighting";
+import {
+  buildCategories,
+  categoriesToTotal,
+  ATTENDED_STATUSES,
+  type GroupMeta,
+  type ItemScore,
+  type AttendanceScore,
+} from "@/lib/grade-model";
 import Link from "next/link";
 
 type Grade = { points_earned: number };
@@ -9,7 +16,6 @@ type AssignmentRow = {
   title: string;
   points_possible: number;
   assignment_group_id: string | null;
-  assignment_group: { name: string; weight_pct: number; position: number } | null;
 };
 type SubmissionRow = { assignment_id: string; grades: Grade | Grade[] | null };
 
@@ -26,29 +32,38 @@ export default async function GradesPage() {
   ]);
   const canManage = isExec || isGrader;
 
-  // A personal "my grades" view. We scope submissions to the viewer
-  // explicitly (their own rows AND their group's) rather than via the
-  // embed — an exec/grader who's also enrolled would otherwise see every
-  // student's submission through RLS, and a plain member's group
-  // submissions (user_id null) would be missed by a user_id-only filter.
-  const { data: assignmentData } = course
-    ? await supabase
-        .from("assignments")
-        .select(
-          `id, title, points_possible, assignment_group_id, due_at,
-             assignment_group:assignment_groups(name, weight_pct, position)`,
-        )
+  // Categories (with weights) + published assignments.
+  let groupData: unknown = null;
+  let assignmentData: unknown = null;
+  if (course) {
+    const [gRes, aRes] = await Promise.all([
+      supabase
+        .from("assignment_groups")
+        .select("id, name, weight_pct, position, kind")
         .eq("course_id", course.id)
-        // Match the exec gradebook exactly: only published assignments,
-        // in a stable order. Without the published filter an exec who's
-        // also enrolled would fold their own draft assignments into the
-        // weighted total and see a different number than the gradebook
-        // shows for them; without the order the table row order drifts
-        // between loads.
+        .order("position", { ascending: true }),
+      supabase
+        .from("assignments")
+        .select("id, title, points_possible, assignment_group_id, due_at")
+        // Only published, stable order — must match the exec gradebook so the
+        // two views compute the identical weighted total.
+        .eq("course_id", course.id)
         .eq("published", true)
-        .order("due_at", { ascending: true, nullsFirst: false })
-    : { data: null };
+        .order("due_at", { ascending: true, nullsFirst: false }),
+    ]);
+    groupData = gRes.data;
+    assignmentData = aRes.data;
+  }
 
+  const groups: GroupMeta[] = (
+    (groupData ?? []) as { id: string; name: string; weight_pct: number; position: number; kind: string | null }[]
+  ).map((g) => ({
+    id: g.id,
+    name: g.name,
+    weight: Number(g.weight_pct),
+    position: g.position,
+    kind: g.kind === "attendance" ? "attendance" : "standard",
+  }));
   const assignments = (assignmentData ?? []) as unknown as AssignmentRow[];
 
   // The viewer's group ids in this course, so group submissions count.
@@ -83,69 +98,104 @@ export default async function GradesPage() {
     }
   }
 
-  type CategoryTotals = {
+  // Category-assigned quizzes + the viewer's scores.
+  type QuizRow = {
     id: string;
-    name: string;
-    weight: number;
-    position: number;
-    earned: number;
+    title: string;
+    assignment_group_id: string | null;
     possible: number;
-    hasGraded: boolean;
+    score: number | null;
   };
-  const categories = new Map<string, CategoryTotals>();
-
-  for (const a of assignments) {
-    const name = a.assignment_group?.name ?? "Ungrouped";
-    const weight = a.assignment_group?.weight_pct ?? 0;
-    const position = a.assignment_group?.position ?? 99;
-    // Key by group IDENTITY, not name — two groups can share a name, and
-    // the exec gradebook keys by id, so both views must too or their
-    // totals diverge.
-    const key = a.assignment_group_id ?? "ungrouped";
-    if (!categories.has(key)) {
-      categories.set(key, {
-        id: key,
-        name,
-        weight,
-        position,
-        earned: 0,
-        possible: 0,
-        hasGraded: false,
-      });
-    }
-    const grade = gradeByAssignment.get(a.id);
-    if (grade != null) {
-      const cat = categories.get(key)!;
-      cat.earned += grade;
-      cat.possible += a.points_possible;
-      cat.hasGraded = true;
+  const quizRows: QuizRow[] = [];
+  if (course && user) {
+    const { data: qData } = await supabase
+      .from("quizzes")
+      .select("id, title, assignment_group_id")
+      .eq("course_id", course.id)
+      .eq("published", true)
+      .not("assignment_group_id", "is", null);
+    const quizzes = (qData ?? []) as { id: string; title: string; assignment_group_id: string | null }[];
+    const quizIds = quizzes.map((q) => q.id);
+    if (quizIds.length) {
+      const [{ data: qQ }, { data: mySubs }] = await Promise.all([
+        supabase.from("quiz_questions").select("quiz_id, points").in("quiz_id", quizIds),
+        supabase.from("quiz_submissions").select("quiz_id, score").eq("user_id", user.id).in("quiz_id", quizIds),
+      ]);
+      const possible = new Map<string, number>();
+      for (const q of (qQ ?? []) as { quiz_id: string; points: number }[]) {
+        possible.set(q.quiz_id, (possible.get(q.quiz_id) ?? 0) + Number(q.points));
+      }
+      const scoreByQuiz = new Map<string, number>();
+      for (const s of (mySubs ?? []) as { quiz_id: string; score: number | null }[]) {
+        if (s.score != null) scoreByQuiz.set(s.quiz_id, Number(s.score));
+      }
+      for (const q of quizzes) {
+        quizRows.push({
+          id: q.id,
+          title: q.title,
+          assignment_group_id: q.assignment_group_id,
+          possible: possible.get(q.id) ?? 0,
+          score: scoreByQuiz.has(q.id) ? scoreByQuiz.get(q.id)! : null,
+        });
+      }
     }
   }
 
-  const categoryList = [...categories.values()].sort(
-    (a, b) => a.position - b.position,
-  );
-  // Shared with the exec gradebook so the two views always agree.
-  const weightedTotal = overallPercent(
-    categoryList.map((c) => ({ weight: c.weight, earned: c.earned, possible: c.possible })),
-  );
+  // The viewer's attendance tally (attended ÷ sessions they were recorded at).
+  let attendance: AttendanceScore | undefined;
+  if (course && user) {
+    const { data: att } = await supabase
+      .from("attendance_records")
+      .select("status, event:calendar_events!inner(course_id)")
+      .eq("user_id", user.id)
+      .eq("event.course_id", course.id);
+    const rows = (att ?? []) as { status: string }[];
+    if (rows.length) {
+      attendance = {
+        attended: rows.filter((r) => ATTENDED_STATUSES.has(r.status)).length,
+        held: rows.length,
+      };
+    }
+  }
+
+  // Build category totals (shared with the exec gradebook).
+  const items: ItemScore[] = [];
+  for (const a of assignments) {
+    const g = gradeByAssignment.get(a.id);
+    if (g != null) items.push({ groupId: a.assignment_group_id, earned: g, possible: a.points_possible });
+  }
+  for (const q of quizRows) {
+    if (q.score != null) items.push({ groupId: q.assignment_group_id, earned: q.score, possible: q.possible });
+  }
+  const categoryLines = buildCategories(groups, items, attendance);
+  const weightedTotal = categoriesToTotal(categoryLines);
+
+  const groupName = new Map(groups.map((g) => [g.id, g.name]));
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-12">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-bold text-navy-deep">Grades</h1>
-          <p className="mt-2 text-sm text-muted">
-            {course?.name ?? "UREC Analyst Program"}
-          </p>
+          <p className="mt-2 text-sm text-muted">{course?.name ?? "UREC Analyst Program"}</p>
         </div>
         {canManage && (
-          <Link
-            href="/grades/gradebook"
-            className="whitespace-nowrap rounded-md bg-blue px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky"
-          >
-            Gradebook
-          </Link>
+          <div className="flex flex-shrink-0 gap-2">
+            {isExec && (
+              <Link
+                href="/grades/weights"
+                className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-[#eef7ff]"
+              >
+                Grade weights
+              </Link>
+            )}
+            <Link
+              href="/grades/gradebook"
+              className="whitespace-nowrap rounded-md bg-blue px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky"
+            >
+              Gradebook
+            </Link>
+          </div>
         )}
       </div>
 
@@ -153,7 +203,7 @@ export default async function GradesPage() {
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="bg-paper-warm text-xs uppercase tracking-wide text-muted">
-              <th className="px-4 py-2.5 font-semibold">Assignment</th>
+              <th className="px-4 py-2.5 font-semibold">Item</th>
               <th className="px-4 py-2.5 text-right font-semibold">Score</th>
             </tr>
           </thead>
@@ -165,7 +215,7 @@ export default async function GradesPage() {
                   <td className="px-4 py-2.5 text-text">
                     {a.title}
                     <span className="ml-2 text-xs text-muted">
-                      {a.assignment_group?.name}
+                      {a.assignment_group_id ? groupName.get(a.assignment_group_id) : "Ungrouped"}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right text-text">
@@ -174,10 +224,23 @@ export default async function GradesPage() {
                 </tr>
               );
             })}
-            {assignments.length === 0 && (
+            {quizRows.map((q) => (
+              <tr key={q.id} className="border-t border-hair">
+                <td className="px-4 py-2.5 text-text">
+                  {q.title}
+                  <span className="ml-2 text-xs text-muted">
+                    Quiz &middot; {q.assignment_group_id ? groupName.get(q.assignment_group_id) : "Ungrouped"}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-right text-text">
+                  {q.score != null ? `${q.score}/${q.possible}` : `—/${q.possible}`}
+                </td>
+              </tr>
+            ))}
+            {assignments.length === 0 && quizRows.length === 0 && (
               <tr>
                 <td className="px-4 py-4 text-muted" colSpan={2}>
-                  No assignments yet.
+                  No graded items yet.
                 </td>
               </tr>
             )}
@@ -186,25 +249,27 @@ export default async function GradesPage() {
       </div>
 
       <div className="mt-8 rounded-md border border-hair bg-white p-5">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-          Weighted Categories
-        </h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Weighted Categories</h2>
         <ul className="mt-3 flex flex-col gap-2">
-          {categoryList.map((c) => (
-            <li
-              key={c.id}
-              className="flex items-center justify-between text-sm"
-            >
+          {categoryLines.map((c) => (
+            <li key={c.id} className="flex items-center justify-between text-sm">
               <span className="text-text">
                 {c.name} ({c.weight}%)
               </span>
               <span className="text-muted">
-                {c.hasGraded
-                  ? `${c.earned}/${c.possible} pts`
-                  : "No grades yet"}
+                {!c.hasData
+                  ? c.kind === "attendance"
+                    ? "No sessions yet"
+                    : "No grades yet"
+                  : c.kind === "attendance"
+                    ? `${c.earned}/${c.possible} sessions`
+                    : `${c.earned}/${c.possible} pts`}
               </span>
             </li>
           ))}
+          {categoryLines.length === 0 && (
+            <li className="text-sm text-muted">No categories set up yet.</li>
+          )}
         </ul>
         <div className="mt-4 flex items-center justify-between border-t border-hair pt-4">
           <span className="font-medium text-navy">Total</span>
