@@ -136,6 +136,12 @@ export default async function DirectoryPage({
               >
                 Manage Groups
               </Link>
+              <Link
+                href="/directory/roles"
+                className="whitespace-nowrap rounded-md border border-hair px-4 py-2 text-xs font-medium text-text transition-colors hover:bg-[#eef7ff]"
+              >
+                Manage Roles
+              </Link>
             </>
           )}
         </div>

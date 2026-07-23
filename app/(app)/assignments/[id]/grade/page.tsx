@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getIsExec, getIsGrader, oneOrFirst } from "@/lib/data/queries";
+import { getIsStaff, getIsGrader, oneOrFirst } from "@/lib/data/queries";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { addSubmissionComment, gradeSubmission } from "../../actions";
@@ -49,11 +49,11 @@ export default async function GradeAssignmentPage({
     .maybeSingle();
   if (!assignment) notFound();
 
-  const [isExec, isGrader] = await Promise.all([
-    getIsExec(),
+  const [isStaff, isGrader] = await Promise.all([
+    getIsStaff(),
     getIsGrader(assignment.course_id),
   ]);
-  if (!isExec && !isGrader) redirect(`/assignments/${id}`);
+  if (!isStaff && !isGrader) redirect(`/assignments/${id}`);
 
   const [{ data: submissions }, { data: rubricLink }] = await Promise.all([
     supabase

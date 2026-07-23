@@ -49,6 +49,20 @@ export async function getIsExec(): Promise<boolean> {
   return getIsRealExec();
 }
 
+/**
+ * Staff tier = full-power exec (President/Exec/Admin) OR Director. Directors
+ * can grade, take attendance, and view submissions across the club, but NOT
+ * manage roles, restructure courses, or edit grade weights — those stay
+ * gated on getIsExec(). Respects "view as student" like getIsExec.
+ */
+export async function getIsStaff(): Promise<boolean> {
+  if (await isStudentView()) return false;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("is_staff");
+  if (error) return false;
+  return Boolean(data);
+}
+
 export async function getIsEnrolled(courseId: string): Promise<boolean> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("is_enrolled", {

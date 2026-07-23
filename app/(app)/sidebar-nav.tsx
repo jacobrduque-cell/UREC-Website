@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { href: "/assignments", label: "Assignments" },
   { href: "/discussions", label: "Discussions" },
   { href: "/quizzes", label: "Quizzes" },
+  { href: "/glossary", label: "Glossary" },
   { href: "/directory", label: "People" },
   { href: "/grades", label: "Grades" },
   { href: "/files", label: "Files" },

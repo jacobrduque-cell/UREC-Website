@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getIsExec } from "@/lib/data/queries";
+import { getIsStaff } from "@/lib/data/queries";
 import { revalidatePath } from "next/cache";
 
 const VALID = new Set(["present", "absent", "excused", "late"]);
@@ -15,7 +15,7 @@ export async function saveAttendance(
   formData: FormData,
 ): Promise<{ error?: string }> {
   try {
-    if (!(await getIsExec())) return { error: "Only exec can take attendance." };
+    if (!(await getIsStaff())) return { error: "Only staff can take attendance." };
 
     const supabase = await createClient();
     const {

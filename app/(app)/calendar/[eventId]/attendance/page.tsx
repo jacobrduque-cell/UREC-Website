@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getIsExec } from "@/lib/data/queries";
+import { getIsStaff } from "@/lib/data/queries";
 import { redirect } from "next/navigation";
 import { saveAttendance } from "./actions";
 import { AttendanceForm } from "./attendance-form";
@@ -16,7 +16,7 @@ export default async function AttendancePage({
   params: Promise<{ eventId: string }>;
 }) {
   const { eventId } = await params;
-  if (!(await getIsExec())) redirect("/calendar");
+  if (!(await getIsStaff())) redirect("/calendar");
 
   const supabase = await createClient();
   const { data: event } = await supabase
