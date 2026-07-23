@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentCourse, getIsExec, getIsGrader, oneOrFirst } from "@/lib/data/queries";
+import { getCurrentCourse, getIsExec, getIsStaff, getIsGrader, oneOrFirst } from "@/lib/data/queries";
 import { submissionStatus, STATUS_LABEL, STATUS_PILL } from "@/lib/submission-status";
 import {
   buildCategories,
@@ -39,8 +39,14 @@ export default async function GradebookPage() {
   const course = await getCurrentCourse();
   if (!course) redirect("/dashboard");
 
-  const [isExec, isGrader] = await Promise.all([getIsExec(), getIsGrader(course.id)]);
-  if (!isExec && !isGrader) redirect("/grades");
+  const [isExec, isStaff, isGrader] = await Promise.all([
+    getIsExec(),
+    getIsStaff(),
+    getIsGrader(course.id),
+  ]);
+  // Staff (incl. Directors) and course graders can view the gradebook; the
+  // "Grade weights" link stays exec-only (checked separately below).
+  if (!isStaff && !isGrader) redirect("/grades");
 
   const supabase = await createClient();
   const [{ data: enrollData }, { data: assignData }, { data: groupData }] = await Promise.all([

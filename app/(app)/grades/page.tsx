@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentCourse, getIsExec, getIsGrader, oneOrFirst } from "@/lib/data/queries";
+import { getCurrentCourse, getIsExec, getIsStaff, getIsGrader, oneOrFirst } from "@/lib/data/queries";
 import {
   buildCategories,
   categoriesToTotal,
@@ -26,11 +26,13 @@ export default async function GradesPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [isExec, isGrader] = await Promise.all([
+  const [isExec, isStaff, isGrader] = await Promise.all([
     getIsExec(),
+    getIsStaff(),
     course ? getIsGrader(course.id) : Promise.resolve(false),
   ]);
-  const canManage = isExec || isGrader;
+  // Staff/graders get the Gradebook; the Grade-weights button stays exec-only.
+  const canManage = isStaff || isGrader;
 
   // Categories (with weights) + published assignments.
   let groupData: unknown = null;
